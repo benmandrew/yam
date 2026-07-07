@@ -80,8 +80,6 @@
           shellHook = ''
             export MEDIA_DIR="''${MEDIA_DIR:-$PWD/.local/media}"
             export DATA_DIR="''${DATA_DIR:-$PWD/.local/data}"
-            echo "YAM devShell ready."
-            echo "  run: uvicorn yam.main:app --reload --port 8080"
           '';
         };
       });

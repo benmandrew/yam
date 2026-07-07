@@ -2,6 +2,9 @@
 result
 result-*
 
+# direnv (nix-direnv cache)
+.direnv/
+
 # Local dev state (devShell defaults MEDIA_DIR/DATA_DIR here)
 /.local/
 
