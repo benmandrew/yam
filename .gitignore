@@ -1,0 +1,18 @@
+# Nix
+result
+result-*
+
+# Local dev state (devShell defaults MEDIA_DIR/DATA_DIR here)
+/.local/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Secrets / runtime
+.env
+*.db
+*.db-wal
+*.db-shm
+cookies.txt

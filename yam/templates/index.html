@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Library · YAM{% endblock %}
+{% block content %}
+<section>
+  <h2>Videos</h2>
+  {% if videos %}
+    <ul class="grid">
+      {% for v in videos %}
+        <li><a href="/watch/{{ v.id }}">{{ v.title }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">No videos yet. Paste a URL above to archive one.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Playlists</h2>
+  {% if playlists %}
+    <ul class="grid">
+      {% for p in playlists %}
+        <li><a href="/playlist/{{ p.id }}">{{ p.title }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">No playlists yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
