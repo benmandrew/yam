@@ -1,12 +1,19 @@
 # Yam — roadmap (further work)
 
-The MVP (milestones 1–4) is **complete**: Nix/Docker/Tailscale scaffolding + DB schema;
-single-video downloads via the background worker with a live `/downloads` page; playback
-(`/media` Range streaming, `/watch` player, thumbnail library grid); and playlists
-(enumeration, ordered links, child jobs with cross-playlist dedup, manual "Next ▸").
+Milestones 1–6 are **complete**:
+
+- **M1–4 (MVP):** Nix/Docker/Tailscale scaffolding + DB schema; single-video downloads via
+  the background worker with a live `/downloads` page; playback (`/media` Range streaming,
+  `/watch` player, thumbnail library grid); and playlists (enumeration, ordered links, child
+  jobs with cross-playlist dedup, manual "Next ▸").
+- **M5 (library & job management):** delete video (guarded while referenced) and delete
+  playlist (full-deletes orphaned videos), retry/clear on `/downloads`, library search + sort.
+- **M6 (playlist sync & polish):** `POST /api/playlists/{id}/sync` re-enumerates and prunes
+  removed links (files kept), retry-pending re-queues missing entries, playlist cover
+  thumbnails, and `/downloads` nests child video jobs under their parent playlist job.
 
 Architecture, code structure, and build/format/lint commands live in `CLAUDE.md` and
-`README.md`. **This file now tracks only the remaining work.**
+`README.md`. **This file now tracks only the remaining work (M7–8 + backlog).**
 
 ## Decisions still in force (respect these)
 
@@ -18,25 +25,6 @@ Architecture, code structure, and build/format/lint commands live in `CLAUDE.md`
 - **Playlist playback = manual "Next ▸"**, no autoplay chaining.
 - **Not-yet-downloaded playlist entries** are `missing` Video rows (hidden from the
   library, shown as "pending" in the playlist).
-
-## Milestone 5 — Library & job management
-
-- **Delete video** (`DELETE /api/videos/{id}`): remove files + row, but only when no
-  playlist still references it (otherwise unlink/guard per the full-delete rule).
-- **Delete playlist** (`DELETE /api/playlists/{id}`): remove playlist + its links, and
-  full-delete any videos left with no other playlist reference.
-- **Job controls on `/downloads`:** retry a failed/errored job; clear finished jobs.
-- **Library search + sort** (by title/channel; order by date/duration/size).
-- Delete affordances (with confirm) on the library, watch, and playlist pages.
-
-## Milestone 6 — Playlist sync & polish
-
-- **Sync** (`POST /api/playlists/{id}/sync`): re-enumerate, enqueue newly added entries,
-  mark removed ones — without deleting local files.
-- **Retry pending/failed entries** directly from the playlist view.
-- **Playlist thumbnails:** populate `Playlist.thumbnail_path` (e.g. first entry's thumb)
-  and show it on the library card.
-- **Downloads grouping:** show a playlist's parent job with its child video jobs nested.
 
 ## Milestone 7 — Ingestion & access polish
 

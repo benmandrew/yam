@@ -1,4 +1,4 @@
-# Yam — a self-hosted YouTube video & playlist archiver
+# Yam
 
 Self-hosted app to archive YouTube **videos and playlists** by link, store them
 locally, and play them back through one web interface. See [PLAN.md](./PLAN.md)
@@ -6,6 +6,23 @@ for the full design and roadmap.
 
 > **Status:** Milestones 1–6 done — downloads, playback, playlists, library/job
 > management, and playlist sync. See [PLAN.md](./PLAN.md) for the remaining roadmap.
+
+## Features
+
+- **Archive by link** — paste a YouTube video or playlist URL; a background
+  worker (`MAX_CONCURRENT_DOWNLOADS` in parallel) fetches it with yt-dlp,
+  preferring H.264/AAC mp4 (~1080p cap) for universal playback.
+- **Live downloads page** (`/downloads`) — job status with retry, clear, and
+  playlist jobs nesting their per-entry child jobs.
+- **Library grid** (`/`) — thumbnail cards with search and sort (by
+  title/channel, date/duration/size).
+- **Playback** — native `<video>` player at `/watch/{id}` backed by Range
+  streaming from `/media/{id}`.
+- **Playlists** (`/playlist/{id}`) — ordered entries, cover thumbnail, manual
+  "Next ▸", one stored file per video shared across playlists, and **sync** to
+  re-enumerate (adding new entries, pruning removed links without deleting files).
+- **Management** — delete a video (guarded while any playlist references it) or a
+  full playlist (full-deletes orphaned videos), and retry pending playlist entries.
 
 ## Requirements
 
