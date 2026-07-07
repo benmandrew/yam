@@ -70,7 +70,7 @@ async def lifespan(_app: FastAPI):
         await worker_task
 
 
-app = FastAPI(title="YAM", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Yam", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 

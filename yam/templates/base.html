@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}YAM{% endblock %}</title>
+  <title>{% block title %}Yam{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', path='/favicon.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/">YAM</a>
+    <a class="brand" href="/">Yam</a>
     <form class="add-form" method="post" action="/api/download">
       <input type="url" name="url" placeholder="Paste a YouTube video or playlist URL…" required>
       <button type="submit">Archive</button>

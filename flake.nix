@@ -1,5 +1,5 @@
 {
-  description = "YAM — self-hosted YouTube video & playlist archiver";
+  description = "Yam — self-hosted YouTube video & playlist archiver";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

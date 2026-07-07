@@ -1,4 +1,4 @@
-# YAM — project guide for Claude
+# Yam — project guide for Claude
 
 Self-hosted app to archive YouTube **videos and playlists** by link, store them
 locally, and play them back through one web UI. Replaces a heavyweight

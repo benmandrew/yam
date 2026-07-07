@@ -1,4 +1,4 @@
-# YAM — Yet Another (YouTube) Media archiver
+# Yam — a self-hosted YouTube video & playlist archiver
 
 Self-hosted app to archive YouTube **videos and playlists** by link, store them
 locally, and play them back through one web interface. See [PLAN.md](./PLAN.md)

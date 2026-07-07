@@ -1,10 +1,13 @@
 :root {
   color-scheme: dark;
-  --bg: #14161a;
-  --fg: #e6e6e6;
-  --muted: #8b93a1;
-  --accent: #ff4d4d;
-  --panel: #1c1f26;
+  /* Palette drawn from the yam favicon: amber body, purple outline, pink flesh */
+  --bg: #171126;
+  --fg: #ece9f5;
+  --muted: #9c94b8;
+  --accent: #6b4ce6;   /* purple (brightened favicon outline) — buttons, bars */
+  --amber: #f9c06a;    /* yam body — wordmark, highlights */
+  --pink: #f58fdc;     /* cut-flesh accent */
+  --panel: #221a3d;
 }
 
 * { box-sizing: border-box; }
@@ -28,7 +31,7 @@ body {
 .brand {
   font-weight: 700;
   font-size: 1.25rem;
-  color: var(--accent);
+  color: var(--amber);
   text-decoration: none;
 }
 
@@ -43,7 +46,7 @@ body {
   flex: 1;
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  border: 1px solid #333;
+  border: 1px solid #3a2f63;
   background: var(--bg);
   color: var(--fg);
 }
@@ -85,9 +88,9 @@ h2 { margin: 1.5rem 0 0.75rem; }
 .empty { color: var(--muted); }
 
 .banner {
-  background: #23303b;
-  border: 1px solid #2d4150;
-  color: #cfe3f2;
+  background: #2a1f4d;
+  border: 1px solid #3d3170;
+  color: #d9d0f2;
   padding: 0.6rem 0.9rem;
   border-radius: 6px;
   margin-bottom: 1rem;
@@ -99,7 +102,7 @@ h2 { margin: 1.5rem 0 0.75rem; }
   background: var(--panel);
   padding: 0.8rem 1rem;
   border-radius: 8px;
-  border-left: 3px solid #333;
+  border-left: 3px solid #3a2f63;
 }
 
 .job--running { border-left-color: var(--accent); }
@@ -116,7 +119,7 @@ h2 { margin: 1.5rem 0 0.75rem; }
   letter-spacing: 0.04em;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  background: #333;
+  background: #3a2f63;
   color: #ddd;
   flex: none;
 }
@@ -124,7 +127,7 @@ h2 { margin: 1.5rem 0 0.75rem; }
 .badge--done { background: #3ecf8e; color: #05130c; }
 .badge--error { background: #ff5c5c; color: #200; }
 
-.bar { height: 6px; background: #2a2e37; border-radius: 999px; margin: 0.55rem 0 0.35rem; overflow: hidden; }
+.bar { height: 6px; background: #2c2352; border-radius: 999px; margin: 0.55rem 0 0.35rem; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--accent); transition: width 0.4s ease; }
 
 .job-meta { font-size: 0.82rem; color: var(--muted); }
@@ -175,7 +178,7 @@ h2 { margin: 1.5rem 0 0.75rem; }
 .watch-title { font-size: 1.4rem; margin: 0.5rem 0 0.4rem; }
 .watch-meta { display: flex; flex-wrap: wrap; gap: 0.75rem; color: var(--muted); font-size: 0.9rem; }
 .watch-meta .tag {
-  background: #2a2e37;
+  background: #2c2352;
   color: #cbd3e1;
   padding: 0.05rem 0.4rem;
   border-radius: 4px;
@@ -217,6 +220,6 @@ h2 { margin: 1.5rem 0 0.75rem; }
 .pl-link { display: flex; align-items: center; gap: 0.7rem; flex: 1; min-width: 0; color: var(--fg); text-decoration: none; }
 .pl-thumb { width: 96px; aspect-ratio: 16 / 9; background: #000; border-radius: 4px; overflow: hidden; flex: none; }
 .pl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pl-thumb--pending { background: #2a2e37; }
+.pl-thumb--pending { background: #2c2352; }
 .pl-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-dur { color: var(--muted); font-size: 0.82rem; flex: none; }
