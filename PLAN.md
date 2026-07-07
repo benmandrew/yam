@@ -72,13 +72,13 @@ another playlist just creates the `playlist_video` link — no re-download.
 
 ## yt-dlp integration
 
-- **Format (highest quality, original codecs):**
-  `bv*+ba/b` — the best video + best audio available, **no quality cap**. Merge into a
-  **browser-playable container**, preferring `webm/mp4/mkv`
-  (`--merge-output-format "webm/mp4/mkv"`): webm for VP9/AV1 + Opus, mp4 for H.264 + AAC,
-  mkv only as a last resort for exotic codec mixes. **Never re-encode** — muxing only, so
-  downloads stay fast and full-quality. (mkv was the original choice, but browsers won't
-  reliably play the mkv *container* in `<video>`, so we prefer webm/mp4.)
+- **Format (universal playback, no re-encode):**
+  `bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[ext=mp4]/bv*+ba/b`, merged to `mp4/webm/mkv`.
+  Prefers **H.264 video + AAC audio in mp4** so files play in **Safari/iOS** and every
+  browser; falls back to any mp4, then best-available. **Never re-encode** — muxing only.
+  Tradeoff: H.264 caps at ~1080p (YouTube offers no H.264 above that), so this is *not*
+  strictly max quality. (History: we started at max-quality mkv, switched to webm/mp4,
+  then to H.264/mp4 after AV1/webm wouldn't play in Safari.)
 - **Metadata:** `writeinfojson`, `writethumbnail` + convert to jpg, capture description,
   upload date, channel, duration, resolution from the info dict.
 - **Output template:** store by id to avoid filename headaches:
@@ -171,12 +171,11 @@ The app is plain HTTP on a port; Tailscale handles access with no app changes. T
   (the file isn't removed while any playlist references it). Deleting a playlist removes
   the playlist and its links, and fully deletes any videos left with no other playlist
   reference.
-- **Playback compatibility:** files are native-codec mkv/webm (VP9/AV1/Opus). These play
-  in Chrome/Firefox and Safari 17+/modern iOS; AV1 is hardware-dependent and very old
-  clients may fail. We accept this per the "highest quality, no re-encode" decision. The
-  DB stores codec info so the UI can badge a video as potentially-incompatible. (An
-  optional on-demand "transcode to MP4" action could be added later for a stubborn device
-  — explicitly out of MVP scope.)
+- **Playback compatibility:** the format policy prefers H.264/AAC mp4, which plays in
+  Safari/iOS and every browser. Rare fallbacks (a video with no H.264, or exotic codec
+  mixes) may land as webm/mkv and won't play in Safari — the DB stores codec info so the
+  UI can badge those. An optional on-demand "transcode to mp4" action could cover them
+  later (out of MVP scope).
 - **Playlist drift:** playlists change upstream; `sync` adds new entries, marks removed
   ones without deleting local files.
 - **Crash recovery:** on boot, reset `running` jobs to `queued` and resume.
@@ -201,8 +200,9 @@ MVP = milestones 1–4. Ship those, then iterate on 5–6.
 
 ## Decisions (locked)
 
-- **Quality:** always highest available, original codecs, **no re-encode** (`bv*+ba/b`,
-  merge to `webm/mp4/mkv`). Accepts VP9/AV1 in webm and its playback caveats.
+- **Quality/compatibility:** prefer **H.264/AAC mp4** for universal playback
+  (Safari/iOS included), **no re-encode**; ~1080p cap accepted. (Revised from the original
+  "always max quality" after AV1/webm wouldn't play in Safari.)
 - **"Play all":** manual next — a "Next ▸" control, no autoplay chaining.
 - **Retention:** full delete — remove files *and* DB rows; protect files still referenced
   by another playlist.

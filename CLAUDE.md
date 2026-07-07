@@ -41,8 +41,8 @@ PLAN.md                Architecture, data model, milestones
   `flake.nix` (packages come from nixpkgs).
 - **Videos are stored once, keyed by YouTube id**; playlists reference them
   through the `playlist_video` link table (a video in N playlists = one file).
-- **Highest quality, no re-encode** (`bv*+ba/b`, merged to a browser-playable
-  container `webm/mp4/mkv`) — see `PLAN.md`.
+- **Prefer H.264/AAC mp4, no re-encode** (for Safari/iOS + universal playback;
+  ~1080p cap) — see `PLAN.md`. Fallbacks may be webm/mkv.
 - **Starlette gotcha:** use the modern `templates.TemplateResponse(request, name,
   context)` signature. The old `(name, {"request": ...})` form raises
   `TypeError: unhashable type: 'dict'` on the pinned Starlette.
