@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Yam{% endblock %}</title>
-  <link rel="icon" href="{{ url_for('static', path='/favicon.png') }}" type="image/png">
-  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+  <!-- Root-relative, not url_for(): behind a TLS-terminating proxy (tailscale
+       serve) the request scheme is http, so url_for() emits http:// asset URLs
+       that a browser loading the page over https blocks as mixed content. -->
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header class="topbar">
