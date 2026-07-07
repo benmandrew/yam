@@ -1,0 +1,24 @@
+{% if jobs %}
+<ul class="jobs">
+  {% for job in jobs %}
+  <li class="job job--{{ job.status.value }}">
+    <div class="job-main">
+      <span class="job-url">{{ job.url }}</span>
+      <span class="badge badge--{{ job.status.value }}">{{ job.status.value }}</span>
+    </div>
+    {% if job.status.value in ('running', 'queued') %}
+    <div class="bar"><div class="bar-fill" style="width: {{ job.progress }}%"></div></div>
+    <div class="job-meta">
+      {{ job.progress }}%{% if job.speed %} · {{ job.speed }}{% endif %}{% if job.eta %} · ETA {{ job.eta }}{% endif %}
+    </div>
+    {% elif job.status.value == 'error' %}
+    <div class="job-error">{{ job.error_msg }}</div>
+    {% elif job.status.value == 'done' and job.target_id %}
+    <div class="job-meta"><a href="/watch/{{ job.target_id }}">Watch →</a></div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">No downloads yet. Paste a URL above to archive one.</p>
+{% endif %}

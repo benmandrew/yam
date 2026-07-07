@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Downloads · YAM{% endblock %}
+{% block content %}
+<h2>Downloads</h2>
+{% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
+<div id="jobs">Loading…</div>
+<script>
+  async function refresh() {
+    try {
+      const r = await fetch('/api/jobs');
+      if (r.ok) document.getElementById('jobs').innerHTML = await r.text();
+    } catch (e) { /* keep last render on transient errors */ }
+  }
+  refresh();
+  setInterval(refresh, 2000);
+</script>
+{% endblock %}

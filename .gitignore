@@ -9,6 +9,9 @@ result-*
 __pycache__/
 *.py[cod]
 .venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
 
 # Secrets / runtime
 .env
