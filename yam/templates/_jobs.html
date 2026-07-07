@@ -13,6 +13,9 @@
     </div>
     {% elif job.status.value == 'error' %}
     <div class="job-error">{{ job.error_msg }}</div>
+    <form method="post" action="/api/jobs/{{ job.id }}/retry">
+      <button type="submit" class="btn-small">Retry</button>
+    </form>
     {% elif job.status.value == 'done' and job.target_id %}
     <div class="job-meta"><a href="/watch/{{ job.target_id }}">Watch →</a></div>
     {% endif %}

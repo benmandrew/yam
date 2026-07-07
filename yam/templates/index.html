@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Library · Yam{% endblock %}
 {% block content %}
+{% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
+
+<form class="toolbar" method="get" action="/">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search title or channel…">
+  <select name="sort" onchange="this.form.submit()">
+    <option value="recent" {{ 'selected' if sort == 'recent' else '' }}>Newest</option>
+    <option value="title" {{ 'selected' if sort == 'title' else '' }}>Title (A–Z)</option>
+    <option value="longest" {{ 'selected' if sort == 'longest' else '' }}>Longest</option>
+    <option value="largest" {{ 'selected' if sort == 'largest' else '' }}>Largest</option>
+  </select>
+  <button type="submit">Search</button>
+</form>
+
 <section>
   <h2>Videos</h2>
   {% if videos %}

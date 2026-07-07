@@ -30,4 +30,9 @@
   {% if video.ext %}<span class="tag">{{ video.ext }}</span>{% endif %}
 </div>
 {% if video.description %}<pre class="watch-desc">{{ video.description }}</pre>{% endif %}
+
+<form class="danger-form" method="post" action="/api/videos/{{ video.id }}/delete"
+      onsubmit="return confirm('Delete “{{ video.title }}” and its files?')">
+  <button type="submit" class="btn-danger">Delete video</button>
+</form>
 {% endblock %}

@@ -223,3 +223,50 @@ h2 { margin: 1.5rem 0 0.75rem; }
 .pl-thumb--pending { background: #2c2352; }
 .pl-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-dur { color: var(--muted); font-size: 0.82rem; flex: none; }
+
+/* Management controls */
+.toolbar { display: flex; gap: 0.5rem; margin: 0.5rem 0 0.5rem; }
+.toolbar input[type="search"] {
+  flex: 1;
+  max-width: 420px;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #3a2f63;
+  background: var(--panel);
+  color: var(--fg);
+}
+.toolbar select,
+.toolbar button {
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #3a2f63;
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.btn-danger {
+  border: 1px solid #7a3550;
+  background: transparent;
+  color: #ff8fb0;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.btn-danger:hover { background: #3a1f2e; }
+.danger-form { margin-top: 1.5rem; }
+
+.btn-small {
+  border: 1px solid #3a2f63;
+  background: var(--panel);
+  color: var(--fg);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  margin-top: 0.4rem;
+}
+
+.playlist-actions { display: flex; gap: 0.6rem; align-items: center; }
+.downloads-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }

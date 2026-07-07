@@ -16,10 +16,12 @@ from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from .db import engine, init_db
-from .models import Job, JobType, Playlist, PlaylistVideo, Video, VideoStatus
+from .library import delete_playlist, delete_video
+from .models import Job, JobStatus, JobType, Playlist, PlaylistVideo, Video, VideoStatus
 from .urls import classify
 from .worker import run_worker
 
@@ -79,17 +81,39 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+_SORTS = {
+    "recent": Video.downloaded_at.desc(),
+    "title": Video.title,
+    "longest": Video.duration_s.desc(),
+    "largest": Video.filesize.desc(),
+}
+
+
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index(
+    request: Request,
+    q: str | None = None,
+    sort: str = "recent",
+    msg: str | None = None,
+):
+    stmt = select(Video).where(Video.status == VideoStatus.present)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(Video.title.ilike(like), Video.channel.ilike(like)))
+    stmt = stmt.order_by(_SORTS.get(sort, _SORTS["recent"]))
     with Session(engine) as session:
-        videos = session.exec(
-            select(Video)
-            .where(Video.status == VideoStatus.present)
-            .order_by(Video.downloaded_at.desc())
-        ).all()
+        videos = session.exec(stmt).all()
         playlists = session.exec(select(Playlist)).all()
     return templates.TemplateResponse(
-        request, "index.html", {"videos": videos, "playlists": playlists}
+        request,
+        "index.html",
+        {
+            "videos": videos,
+            "playlists": playlists,
+            "q": q or "",
+            "sort": sort,
+            "msg": msg,
+        },
     )
 
 
@@ -197,13 +221,57 @@ def thumbnail(video_id: str):
     return FileResponse(video.thumbnail_path, media_type="image/jpeg")
 
 
+@app.post("/api/videos/{video_id}/delete")
+def delete_video_route(video_id: str):
+    _ok, msg = delete_video(video_id)
+    return _redirect("/", msg)
+
+
+@app.post("/api/playlists/{playlist_id}/delete")
+def delete_playlist_route(playlist_id: str):
+    _ok, msg = delete_playlist(playlist_id)
+    return _redirect("/", msg)
+
+
+@app.post("/api/jobs/{job_id}/retry")
+def retry_job(job_id: int):
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if job and job.status == JobStatus.error:
+            job.status = JobStatus.queued
+            job.progress = 0.0
+            job.error_msg = None
+            session.add(job)
+            session.commit()
+    return _redirect_downloads("Retrying…")
+
+
+@app.post("/api/jobs/clear")
+def clear_jobs():
+    with Session(engine) as session:
+        finished = session.exec(
+            select(Job).where(
+                Job.status.in_([JobStatus.done, JobStatus.error, JobStatus.skipped])
+            )
+        ).all()
+        for job in finished:
+            session.delete(job)
+        session.commit()
+    return _redirect_downloads("Cleared finished downloads.")
+
+
 # --- helpers ----------------------------------------------------------------
 
 
-def _redirect_downloads(msg: str) -> RedirectResponse:
+def _redirect(path: str, msg: str) -> RedirectResponse:
     from urllib.parse import urlencode
 
-    return RedirectResponse(f"/downloads?{urlencode({'msg': msg})}", status_code=303)
+    sep = "&" if "?" in path else "?"
+    return RedirectResponse(f"{path}{sep}{urlencode({'msg': msg})}", status_code=303)
+
+
+def _redirect_downloads(msg: str) -> RedirectResponse:
+    return _redirect("/downloads", msg)
 
 
 def _video_present(video_id: str) -> bool:

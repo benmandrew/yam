@@ -16,7 +16,11 @@ player, thumbnail library grid (M3); and playlists — enumeration, ordered
 `playlist_video` links, per-entry child jobs with dedup across playlists,
 `/playlist/{id}` view, and manual "Next ▸" playback (M4). Not-yet-downloaded
 playlist entries are stored as `missing` Video rows (hidden from the library,
-shown as "pending" in the playlist). Remaining: management/polish (PLAN.md M5–6).
+shown as "pending" in the playlist).
+
+M5 (library & job management) is also done: delete video (`yam/library.py`, refused
+while any playlist references it) and delete playlist (full-deletes orphaned videos),
+retry/clear on `/downloads`, and library search + sort. Remaining: PLAN.md M6–8.
 
 ## Structure
 

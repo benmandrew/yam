@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Downloads · Yam{% endblock %}
 {% block content %}
-<h2>Downloads</h2>
+<div class="downloads-head">
+  <h2>Downloads</h2>
+  <form method="post" action="/api/jobs/clear">
+    <button type="submit" class="btn-small">Clear finished</button>
+  </form>
+</div>
 {% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
 <div id="jobs">Loading…</div>
 <script>
