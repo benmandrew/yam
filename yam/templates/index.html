@@ -6,7 +6,8 @@
 <form class="toolbar" method="get" action="/">
   <input type="search" name="q" value="{{ q }}" placeholder="Search title or channel…">
   <select name="sort" onchange="this.form.submit()">
-    <option value="recent" {{ 'selected' if sort == 'recent' else '' }}>Newest</option>
+    <option value="uploaded" {{ 'selected' if sort == 'uploaded' else '' }}>Upload date</option>
+    <option value="added" {{ 'selected' if sort == 'added' else '' }}>Date added</option>
     <option value="title" {{ 'selected' if sort == 'title' else '' }}>Title (A–Z)</option>
     <option value="longest" {{ 'selected' if sort == 'longest' else '' }}>Longest</option>
     <option value="largest" {{ 'selected' if sort == 'largest' else '' }}>Largest</option>
@@ -27,7 +28,11 @@
             {% if v.duration_s %}<span class="thumb-dur">{{ v.duration_s | duration }}</span>{% endif %}
           </div>
           <div class="card-title">{{ v.title }}</div>
-          <div class="card-sub">{% if v.channel %}{{ v.channel }}{% endif %}</div>
+          <div class="card-sub">
+            {% if v.channel %}{{ v.channel }}{% endif %}
+            {% if v.channel and v.upload_date %} · {% endif %}
+            {% if v.upload_date %}{{ v.upload_date | ytdate }}{% endif %}
+          </div>
         </a>
       </li>
       {% endfor %}

@@ -82,7 +82,8 @@ def healthz() -> dict[str, str]:
 
 
 _SORTS = {
-    "recent": Video.downloaded_at.desc(),
+    "uploaded": Video.upload_date.desc(),
+    "added": Video.downloaded_at.desc(),
     "title": Video.title,
     "longest": Video.duration_s.desc(),
     "largest": Video.filesize.desc(),
@@ -93,14 +94,14 @@ _SORTS = {
 def index(
     request: Request,
     q: str | None = None,
-    sort: str = "recent",
+    sort: str = "uploaded",
     msg: str | None = None,
 ):
     stmt = select(Video).where(Video.status == VideoStatus.present)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(Video.title.ilike(like), Video.channel.ilike(like)))
-    stmt = stmt.order_by(_SORTS.get(sort, _SORTS["recent"]))
+    stmt = stmt.order_by(_SORTS.get(sort, _SORTS["uploaded"]))
     with Session(engine) as session:
         videos = session.exec(stmt).all()
         playlists = session.exec(select(Playlist)).all()
