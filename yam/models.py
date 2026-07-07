@@ -56,6 +56,7 @@ class Video(SQLModel, table=True):
     duration_s: Optional[int] = None
     upload_date: Optional[str] = None  # YYYYMMDD as returned by yt-dlp
     thumbnail_path: Optional[str] = None
+    subtitle_path: Optional[str] = None  # WebVTT sidecar when DOWNLOAD_SUBTITLES
     file_path: Optional[str] = None
     filesize: Optional[int] = None
     width: Optional[int] = None

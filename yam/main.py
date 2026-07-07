@@ -8,17 +8,22 @@ Playlists arrive in Milestone 4.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
+from . import disk
+from .config import settings
 from .db import engine, init_db
 from .library import delete_playlist, delete_video
 from .models import Job, JobStatus, JobType, Playlist, PlaylistVideo, Video, VideoStatus
@@ -74,6 +79,34 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Yam", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+def _auth_ok(header: str | None) -> bool:
+    """Constant-time check of an HTTP Basic Authorization header."""
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        user, _, pwd = base64.b64decode(header[6:]).decode("utf-8").partition(":")
+    except (binascii.Error, UnicodeDecodeError):
+        return False
+    # Compare both halves (non-short-circuit) to avoid leaking which was wrong.
+    ok_user = secrets.compare_digest(user, settings.basic_auth_user or "")
+    ok_pwd = secrets.compare_digest(pwd, settings.basic_auth_pass or "")
+    return ok_user and ok_pwd
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    # Defense-in-depth atop host TLS; /healthz stays open for container probes.
+    if (
+        settings.basic_auth_enabled
+        and request.url.path != "/healthz"
+        and not _auth_ok(request.headers.get("Authorization"))
+    ):
+        return Response(
+            status_code=401, headers={"WWW-Authenticate": 'Basic realm="Yam"'}
+        )
+    return await call_next(request)
 
 
 @app.get("/healthz")
@@ -152,6 +185,21 @@ def downloads(request: Request, msg: str | None = None):
     return templates.TemplateResponse(request, "downloads.html", {"msg": msg})
 
 
+@app.get("/config", response_class=HTMLResponse)
+def config_view(request: Request):
+    total, _used, free = disk.usage()
+    return templates.TemplateResponse(
+        request,
+        "config.html",
+        {
+            "settings": settings,
+            "archived": disk.archived_bytes(),
+            "disk_total": total,
+            "disk_free": free,
+        },
+    )
+
+
 @app.get("/api/jobs", response_class=HTMLResponse)
 def jobs_partial(request: Request):
     with Session(engine) as session:
@@ -165,7 +213,10 @@ def jobs_partial(request: Request):
             children.setdefault(job.parent_job_id, []).append(job)
     top_ids = {job.id for job in jobs if job.parent_job_id is None}
     groups = [
-        {"job": job, "children": sorted(children.get(job.id, []), key=lambda c: c.created_at)}
+        {
+            "job": job,
+            "children": sorted(children.get(job.id, []), key=lambda c: c.created_at),
+        }
         for job in jobs
         if job.parent_job_id is None or job.parent_job_id not in top_ids
     ]
@@ -278,6 +329,19 @@ def thumbnail(video_id: str):
     ):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(video.thumbnail_path, media_type="image/jpeg")
+
+
+@app.get("/media/{video_id}/subtitles")
+def subtitles(video_id: str):
+    with Session(engine) as session:
+        video = session.get(Video, video_id)
+    if (
+        video is None
+        or not video.subtitle_path
+        or not os.path.exists(video.subtitle_path)
+    ):
+        raise HTTPException(status_code=404, detail="Subtitles not found")
+    return FileResponse(video.subtitle_path, media_type="text/vtt")
 
 
 @app.post("/api/videos/{video_id}/delete")

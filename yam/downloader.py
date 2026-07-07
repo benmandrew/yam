@@ -18,6 +18,26 @@ from .config import settings
 ProgressCb = Callable[[float, str | None, str | None], None]
 
 
+def friendly_error(exc: Exception) -> str:
+    """Turn a raw yt-dlp error into an actionable message. YouTube's anti-bot
+    gate ("Sign in to confirm you're not a bot") is the common one and is fixed
+    by supplying an authenticated cookies.txt via COOKIES_FILE."""
+    msg = str(exc)
+    lowered = msg.lower()
+    if "confirm you're not a bot" in lowered or "confirm you are not a bot" in lowered:
+        hint = (
+            "YouTube is asking to confirm you're not a bot. Export a logged-in "
+            "cookies.txt and mount it, then set COOKIES_FILE to its path "
+            "(see the README)."
+        )
+        return (
+            hint
+            if settings.cookies_file is None
+            else f"{hint} Current COOKIES_FILE was rejected — re-export fresh cookies."
+        )
+    return msg
+
+
 def _ydl_opts(progress_hook: Callable[[dict], None]) -> dict[str, Any]:
     opts: dict[str, Any] = {
         # Prefer H.264 + AAC in mp4 for universal playback (Safari/iOS included);
@@ -42,6 +62,9 @@ def _ydl_opts(progress_hook: Callable[[dict], None]) -> dict[str, Any]:
                 "writesubtitles": True,
                 "writeautomaticsub": True,
                 "subtitleslangs": ["en"],
+                # WebVTT is the only sub format a browser <track> can read; YouTube
+                # serves it natively so no ffmpeg conversion is needed.
+                "subtitlesformat": "vtt",
             }
         )
     if settings.cookies_file:

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Config · Yam{% endblock %}
+{% block content %}
+<a class="back" href="/">← Library</a>
+<h2>Configuration</h2>
+<p class="empty">Read-only view of the effective settings (from the environment).</p>
+
+<table class="config-table">
+  <tr><th>Media directory</th><td>{{ settings.media_dir }}</td></tr>
+  <tr><th>Data directory</th><td>{{ settings.data_dir }}</td></tr>
+  <tr><th>Max concurrent downloads</th><td>{{ settings.max_concurrent_downloads }}</td></tr>
+  <tr><th>Download subtitles</th><td>{{ "on" if settings.download_subtitles else "off" }}</td></tr>
+  <tr><th>Cookies file</th><td>{{ settings.cookies_file or "— not set" }}</td></tr>
+  <tr>
+    <th>Min free space guard</th>
+    <td>{% if settings.min_free_space_mb > 0 %}{{ settings.min_free_space_mb }} MB{% else %}disabled{% endif %}</td>
+  </tr>
+  <tr><th>Basic auth</th><td>{{ "enabled" if settings.basic_auth_enabled else "disabled" }}</td></tr>
+</table>
+
+<h2>Storage</h2>
+<table class="config-table">
+  <tr><th>Archived videos</th><td>{{ archived | filesizeformat }}</td></tr>
+  <tr><th>Disk free</th><td>{{ disk_free | filesizeformat }} of {{ disk_total | filesizeformat }}</td></tr>
+</table>
+{% endblock %}

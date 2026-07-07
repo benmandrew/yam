@@ -5,7 +5,8 @@ locally, and play them back through one web interface. See [PLAN.md](./PLAN.md)
 for the full design and roadmap.
 
 > **Status:** Milestones 1–6 done — downloads, playback, playlists, library/job
-> management, and playlist sync. See [PLAN.md](./PLAN.md) for the remaining roadmap.
+> management, and playlist sync. M7 underway (cookies guidance + subtitles). See
+> [PLAN.md](./PLAN.md) for the remaining roadmap.
 
 ## Features
 
@@ -83,6 +84,48 @@ docker compose up -d
 | `MAX_CONCURRENT_DOWNLOADS` | `2` | Parallel download workers |
 | `DOWNLOAD_SUBTITLES` | `false` | Fetch subtitles alongside videos |
 | `COOKIES_FILE` | — | Path to cookies.txt for restricted content |
+| `MIN_FREE_SPACE_MB` | `500` | Refuse to start a download below this free space (`0` disables) |
+| `BASIC_AUTH_USER` | — | Username for optional HTTP Basic auth |
+| `BASIC_AUTH_PASS` | — | Password for optional HTTP Basic auth |
+
+The effective settings and storage stats are visible read-only at `/config`.
 
 The app listens on port **8080** inside the container/package. To use a different
 port in local dev, pass it to uvicorn: `uvicorn yam.main:app --port 9000`.
+
+### Subtitles
+
+Set `DOWNLOAD_SUBTITLES=true` to fetch the English subtitle track (manual, else
+auto-generated) as WebVTT alongside each new video; the player then shows a
+selectable subtitle track. Already-archived videos are unaffected — re-download
+them to pick up subs.
+
+### Cookies (restricted / age-gated content)
+
+Some videos, and increasingly ordinary ones, return *"Sign in to confirm you're
+not a bot"*. To get past it, export a `cookies.txt` from a browser where you're
+signed in to YouTube (e.g. the "Get cookies.txt" extension, Netscape format),
+mount it into the container, and point `COOKIES_FILE` at it:
+
+```yaml
+# docker-compose.yml
+    environment:
+      COOKIES_FILE: /data/cookies.txt   # mounted alongside the DB volume
+```
+
+When a download or playlist enumeration hits the bot check, the failed job on
+`/downloads` shows this guidance instead of the raw yt-dlp error.
+
+### Access control (optional Basic auth)
+
+Yam speaks plain HTTP and expects TLS/access control in front of it (see
+[Deploy](#deploy)). As defense-in-depth, set **both** `BASIC_AUTH_USER` and
+`BASIC_AUTH_PASS` to require HTTP Basic auth on every route except `/healthz`
+(kept open for container health probes). Leave either unset to disable it.
+
+### Disk guard
+
+Downloads are refused when free space on `MEDIA_DIR` would drop below
+`MIN_FREE_SPACE_MB` (default 500 MB; set `0` to disable); the job fails with a
+clear message so you can free space and retry. Current archived size and free
+space are shown at `/config`.

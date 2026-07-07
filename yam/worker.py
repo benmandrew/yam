@@ -20,7 +20,8 @@ from sqlmodel import Session, select
 
 from .config import settings
 from .db import engine
-from .downloader import download_video, enumerate_playlist
+from .disk import has_min_free_space
+from .downloader import download_video, enumerate_playlist, friendly_error
 from .models import (
     Job,
     JobStatus,
@@ -113,7 +114,19 @@ def _process_job_blocking(job_id: int) -> None:
     if job_type == JobType.playlist:
         _enumerate_playlist_job(job_id, url)
     else:
+        ok, free = has_min_free_space()
+        if not ok:
+            _finish_job(job_id, JobStatus.error, error=_low_space_msg(free))
+            return
         _download_video_job(job_id, url)
+
+
+def _low_space_msg(free_bytes: int) -> str:
+    free_mb = free_bytes // (1024 * 1024)
+    return (
+        f"Not enough free disk space: {free_mb} MB free, "
+        f"MIN_FREE_SPACE_MB={settings.min_free_space_mb}. Free space and retry."
+    )
 
 
 def _download_video_job(job_id: int, url: str) -> None:
@@ -140,7 +153,7 @@ def _download_video_job(job_id: int, url: str) -> None:
         _save_video(info)
         _finish_job(job_id, JobStatus.done, target_id=info.get("id"))
     except Exception as exc:  # noqa: BLE001 - recorded on the job row
-        _finish_job(job_id, JobStatus.error, error=str(exc))
+        _finish_job(job_id, JobStatus.error, error=friendly_error(exc))
         raise
 
 
@@ -179,6 +192,12 @@ def _save_video(info: dict[str, Any]) -> None:
 
     thumbnail = next((str(p) for p in video_dir.glob(f"{vid}.jpg")), None)
 
+    # yt-dlp writes subs as "<id>.<lang>.vtt"; prefer the English track.
+    subtitle = next(
+        (str(p) for p in sorted(video_dir.glob(f"{vid}.en*.vtt"))),
+        next((str(p) for p in sorted(video_dir.glob(f"{vid}*.vtt"))), None),
+    )
+
     filesize = requested.get("filesize") or info.get("filesize")
     if not filesize and file_path and os.path.exists(file_path):
         filesize = os.path.getsize(file_path)
@@ -192,6 +211,7 @@ def _save_video(info: dict[str, Any]) -> None:
         video.duration_s = int(info["duration"]) if info.get("duration") else None
         video.upload_date = info.get("upload_date")
         video.thumbnail_path = thumbnail
+        video.subtitle_path = subtitle
         video.file_path = file_path
         video.filesize = filesize
         video.width = info.get("width")
@@ -214,7 +234,7 @@ def _enumerate_playlist_job(job_id: int, url: str) -> None:
         _save_playlist(info, parent_job_id=job_id)
         _finish_job(job_id, JobStatus.done, target_id=info.get("id"))
     except Exception as exc:  # noqa: BLE001 - recorded on the job row
-        _finish_job(job_id, JobStatus.error, error=str(exc))
+        _finish_job(job_id, JobStatus.error, error=friendly_error(exc))
         raise
 
 

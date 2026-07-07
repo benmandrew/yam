@@ -14,6 +14,10 @@
 <div class="player">
   <video controls playsinline preload="metadata" poster="/media/{{ video.id }}/thumbnail">
     <source src="/media/{{ video.id }}" type="{{ mime }}">
+    {% if video.subtitle_path %}
+    <track kind="subtitles" label="English" srclang="en"
+           src="/media/{{ video.id }}/subtitles" default>
+    {% endif %}
     Your browser can't play this file's format ({{ video.ext }}).
   </video>
 </div>

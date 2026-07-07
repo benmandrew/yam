@@ -276,3 +276,18 @@ h2 { margin: 1.5rem 0 0.75rem; }
   padding-left: 0.7rem;
   border-left: 2px solid #3a2f63;
 }
+
+.config-table {
+  border-collapse: collapse;
+  margin: 0.5rem 0 1.5rem;
+  max-width: 40rem;
+}
+.config-table th,
+.config-table td {
+  text-align: left;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #3a2f63;
+  vertical-align: top;
+}
+.config-table th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+.config-table td { word-break: break-all; }
