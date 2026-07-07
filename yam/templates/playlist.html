@@ -12,6 +12,12 @@
     {% if first_present %}
     <a class="btn" href="/watch/{{ first_present }}?list={{ playlist.id }}">▶ Play all</a>
     {% endif %}
+    <form method="post" action="/api/playlists/{{ playlist.id }}/sync">
+      <button type="submit" class="btn-small">Sync</button>
+    </form>
+    <form method="post" action="/api/playlists/{{ playlist.id }}/retry">
+      <button type="submit" class="btn-small">Retry pending</button>
+    </form>
     <form method="post" action="/api/playlists/{{ playlist.id }}/delete"
           onsubmit="return confirm('Delete playlist “{{ playlist.title }}”? Videos not in any other playlist will be deleted too.')">
       <button type="submit" class="btn-danger">Delete playlist</button>

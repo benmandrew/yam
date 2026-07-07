@@ -20,7 +20,15 @@ shown as "pending" in the playlist).
 
 M5 (library & job management) is also done: delete video (`yam/library.py`, refused
 while any playlist references it) and delete playlist (full-deletes orphaned videos),
-retry/clear on `/downloads`, and library search + sort. Remaining: PLAN.md M6–8.
+retry/clear on `/downloads`, and library search + sort.
+
+M6 (playlist sync & polish) is done: `POST /api/playlists/{id}/sync` re-enumerates and
+prunes removed links (files kept), retry-pending re-queues missing entries, playlist
+cover thumbnails (`/playlist/{id}/thumbnail` = first present entry), and `/downloads`
+nests child video jobs under their parent playlist job. Remaining: PLAN.md M7–8.
+
+Note: models have no ORM `Relationship()`, so never insert a PlaylistVideo in the same
+flush as the Playlist/Video it references — commit the parents first (the worker does).
 
 ## Structure
 

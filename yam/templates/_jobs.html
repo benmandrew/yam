@@ -1,23 +1,40 @@
-{% if jobs %}
+{% macro job_row(job) %}
+<div class="job-main">
+  <span class="job-url">{{ job.url }}</span>
+  <span class="badge badge--{{ job.status.value }}">{{ job.status.value }}</span>
+</div>
+{% if job.status.value in ('running', 'queued') %}
+<div class="bar"><div class="bar-fill" style="width: {{ job.progress }}%"></div></div>
+<div class="job-meta">
+  {{ job.progress }}%{% if job.speed %} · {{ job.speed }}{% endif %}{% if job.eta %} · ETA {{ job.eta }}{% endif %}
+</div>
+{% elif job.status.value == 'error' %}
+<div class="job-error">{{ job.error_msg }}</div>
+<form method="post" action="/api/jobs/{{ job.id }}/retry">
+  <button type="submit" class="btn-small">Retry</button>
+</form>
+{% elif job.status.value == 'done' and job.target_id %}
+<div class="job-meta">
+  {% if job.type.value == 'playlist' %}
+  <a href="/playlist/{{ job.target_id }}">Open playlist →</a>
+  {% else %}
+  <a href="/watch/{{ job.target_id }}">Watch →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% if groups %}
 <ul class="jobs">
-  {% for job in jobs %}
-  <li class="job job--{{ job.status.value }}">
-    <div class="job-main">
-      <span class="job-url">{{ job.url }}</span>
-      <span class="badge badge--{{ job.status.value }}">{{ job.status.value }}</span>
-    </div>
-    {% if job.status.value in ('running', 'queued') %}
-    <div class="bar"><div class="bar-fill" style="width: {{ job.progress }}%"></div></div>
-    <div class="job-meta">
-      {{ job.progress }}%{% if job.speed %} · {{ job.speed }}{% endif %}{% if job.eta %} · ETA {{ job.eta }}{% endif %}
-    </div>
-    {% elif job.status.value == 'error' %}
-    <div class="job-error">{{ job.error_msg }}</div>
-    <form method="post" action="/api/jobs/{{ job.id }}/retry">
-      <button type="submit" class="btn-small">Retry</button>
-    </form>
-    {% elif job.status.value == 'done' and job.target_id %}
-    <div class="job-meta"><a href="/watch/{{ job.target_id }}">Watch →</a></div>
+  {% for g in groups %}
+  <li class="job job--{{ g.job.status.value }}">
+    {{ job_row(g.job) }}
+    {% if g.children %}
+    <ul class="jobs job-children">
+      {% for c in g.children %}
+      <li class="job job--{{ c.status.value }}">{{ job_row(c) }}</li>
+      {% endfor %}
+    </ul>
     {% endif %}
   </li>
   {% endfor %}

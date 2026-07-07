@@ -242,6 +242,23 @@ def _save_playlist(info: dict[str, Any], *, parent_job_id: int) -> None:
         if not _video_present(vid) and not _active_video_job(vid):
             _enqueue_video_job(vid, parent_job_id=parent_job_id)
 
+    # On re-sync, drop links for entries no longer in the upstream playlist
+    # (files/rows are kept — deletion is a separate, explicit action).
+    _prune_removed_links(pid, {entry["id"] for entry in entries})
+
+
+def _prune_removed_links(playlist_id: str, current_ids: set[str]) -> None:
+    with Session(engine) as session:
+        stale = session.exec(
+            select(PlaylistVideo).where(
+                PlaylistVideo.playlist_id == playlist_id,
+                PlaylistVideo.video_id.not_in(current_ids),
+            )
+        ).all()
+        for link in stale:
+            session.delete(link)
+        session.commit()
+
 
 def _upsert_placeholder_video(vid: str, title: str | None) -> None:
     """Record a not-yet-downloaded entry as a `missing` Video so the playlist
@@ -286,7 +303,7 @@ def _active_video_job(vid: str) -> bool:
     return row is not None
 
 
-def _enqueue_video_job(vid: str, *, parent_job_id: int) -> None:
+def _enqueue_video_job(vid: str, *, parent_job_id: int | None = None) -> None:
     url = f"https://www.youtube.com/watch?v={vid}"
     with Session(engine) as session:
         session.add(
@@ -298,3 +315,22 @@ def _enqueue_video_job(vid: str, *, parent_job_id: int) -> None:
             )
         )
         session.commit()
+
+
+def enqueue_pending_for_playlist(playlist_id: str) -> int:
+    """Enqueue downloads for a playlist's still-missing entries that have no
+    active job. Returns how many were queued."""
+    with Session(engine) as session:
+        links = session.exec(
+            select(PlaylistVideo)
+            .where(PlaylistVideo.playlist_id == playlist_id)
+            .order_by(PlaylistVideo.position)
+        ).all()
+        video_ids = [link.video_id for link in links]
+
+    queued = 0
+    for vid in video_ids:
+        if not _video_present(vid) and not _active_video_job(vid):
+            _enqueue_video_job(vid)
+            queued += 1
+    return queued

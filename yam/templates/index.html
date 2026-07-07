@@ -47,7 +47,19 @@
   {% if playlists %}
     <ul class="cards">
       {% for p in playlists %}
-      <li class="card"><a href="/playlist/{{ p.id }}"><div class="card-title">{{ p.title }}</div></a></li>
+      <li class="card">
+        <a href="/playlist/{{ p.id }}">
+          <div class="thumb">
+            <img loading="lazy" src="/playlist/{{ p.id }}/thumbnail" alt=""
+                 onerror="this.style.visibility='hidden'">
+            <span class="thumb-dur">{{ playlist_counts[p.id] }} ▸</span>
+          </div>
+          <div class="card-title">{{ p.title }}</div>
+          <div class="card-sub">
+            {{ playlist_counts[p.id] }} videos{% if p.channel %} · {{ p.channel }}{% endif %}
+          </div>
+        </a>
+      </li>
       {% endfor %}
     </ul>
   {% else %}

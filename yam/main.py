@@ -23,7 +23,7 @@ from .db import engine, init_db
 from .library import delete_playlist, delete_video
 from .models import Job, JobStatus, JobType, Playlist, PlaylistVideo, Video, VideoStatus
 from .urls import classify
-from .worker import run_worker
+from .worker import enqueue_pending_for_playlist, run_worker
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -105,12 +105,21 @@ def index(
     with Session(engine) as session:
         videos = session.exec(stmt).all()
         playlists = session.exec(select(Playlist)).all()
+        playlist_counts = {
+            p.id: len(
+                session.exec(
+                    select(PlaylistVideo).where(PlaylistVideo.playlist_id == p.id)
+                ).all()
+            )
+            for p in playlists
+        }
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "videos": videos,
             "playlists": playlists,
+            "playlist_counts": playlist_counts,
             "q": q or "",
             "sort": sort,
             "msg": msg,
@@ -147,9 +156,20 @@ def downloads(request: Request, msg: str | None = None):
 def jobs_partial(request: Request):
     with Session(engine) as session:
         jobs = session.exec(
-            select(Job).order_by(Job.created_at.desc()).limit(100)
+            select(Job).order_by(Job.created_at.desc()).limit(200)
         ).all()
-    return templates.TemplateResponse(request, "_jobs.html", {"jobs": jobs})
+    # Nest child video jobs under their parent playlist job.
+    children: dict[int, list[Job]] = {}
+    for job in jobs:
+        if job.parent_job_id is not None:
+            children.setdefault(job.parent_job_id, []).append(job)
+    top_ids = {job.id for job in jobs if job.parent_job_id is None}
+    groups = [
+        {"job": job, "children": sorted(children.get(job.id, []), key=lambda c: c.created_at)}
+        for job in jobs
+        if job.parent_job_id is None or job.parent_job_id not in top_ids
+    ]
+    return templates.TemplateResponse(request, "_jobs.html", {"groups": groups})
 
 
 @app.get("/watch/{video_id}", response_class=HTMLResponse)
@@ -196,6 +216,44 @@ def playlist_view(request: Request, playlist_id: str):
         "playlist.html",
         {"playlist": playlist, "videos": videos, "first_present": first_present},
     )
+
+
+@app.get("/playlist/{playlist_id}/thumbnail")
+def playlist_thumbnail(playlist_id: str):
+    """Serve the first present entry's thumbnail as the playlist cover."""
+    with Session(engine) as session:
+        links = session.exec(
+            select(PlaylistVideo)
+            .where(PlaylistVideo.playlist_id == playlist_id)
+            .order_by(PlaylistVideo.position)
+        ).all()
+        for link in links:
+            video = session.get(Video, link.video_id)
+            if (
+                video
+                and video.status == VideoStatus.present
+                and video.thumbnail_path
+                and os.path.exists(video.thumbnail_path)
+            ):
+                return FileResponse(video.thumbnail_path, media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="No thumbnail available")
+
+
+@app.post("/api/playlists/{playlist_id}/sync")
+def sync_playlist(playlist_id: str):
+    with Session(engine) as session:
+        if session.get(Playlist, playlist_id) is None:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        url = f"https://www.youtube.com/playlist?list={playlist_id}"
+        session.add(Job(type=JobType.playlist, url=url, target_id=playlist_id))
+        session.commit()
+    return _redirect(f"/playlist/{playlist_id}", "Syncing playlist…")
+
+
+@app.post("/api/playlists/{playlist_id}/retry")
+def retry_playlist(playlist_id: str):
+    queued = enqueue_pending_for_playlist(playlist_id)
+    return _redirect(f"/playlist/{playlist_id}", f"Queued {queued} pending video(s).")
 
 
 @app.get("/media/{video_id}")
