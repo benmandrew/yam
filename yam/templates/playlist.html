@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ playlist.title }} · YAM{% endblock %}
+{% block content %}
+<a class="back" href="/">← Library</a>
+<div class="playlist-head">
+  <h1>{{ playlist.title }}</h1>
+  <div class="watch-meta">
+    {% if playlist.channel %}<span>{{ playlist.channel }}</span>{% endif %}
+    <span>{{ videos | length }} videos</span>
+  </div>
+  {% if first_present %}
+  <a class="btn" href="/watch/{{ first_present }}?list={{ playlist.id }}">▶ Play all</a>
+  {% endif %}
+</div>
+
+<ol class="playlist-items">
+  {% for v in videos %}
+  <li class="pl-item {% if not v or v.status.value != 'present' %}pl-item--pending{% endif %}">
+    <span class="pl-idx">{{ loop.index }}</span>
+    {% if v and v.status.value == 'present' %}
+    <a class="pl-link" href="/watch/{{ v.id }}?list={{ playlist.id }}">
+      <div class="pl-thumb">
+        <img loading="lazy" src="/media/{{ v.id }}/thumbnail" alt=""
+             onerror="this.style.visibility='hidden'">
+      </div>
+      <span class="pl-title">{{ v.title }}</span>
+      {% if v.duration_s %}<span class="pl-dur">{{ v.duration_s | duration }}</span>{% endif %}
+    </a>
+    {% else %}
+    <div class="pl-link pl-link--pending">
+      <div class="pl-thumb pl-thumb--pending"></div>
+      <span class="pl-title">{{ v.title if v else 'Unknown video' }}</span>
+      <span class="badge">pending</span>
+    </div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endblock %}

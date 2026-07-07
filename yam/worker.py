@@ -20,8 +20,16 @@ from sqlmodel import Session, select
 
 from .config import settings
 from .db import engine
-from .downloader import download_video
-from .models import Job, JobStatus, Video, VideoStatus
+from .downloader import download_video, enumerate_playlist
+from .models import (
+    Job,
+    JobStatus,
+    JobType,
+    Playlist,
+    PlaylistVideo,
+    Video,
+    VideoStatus,
+)
 
 log = logging.getLogger("yam.worker")
 
@@ -50,9 +58,9 @@ async def run_worker(stop: asyncio.Event) -> None:
 
 async def _run_job(job_id: int, inflight: set[int]) -> None:
     try:
-        await asyncio.to_thread(_download_job_blocking, job_id)
+        await asyncio.to_thread(_process_job_blocking, job_id)
     except Exception:
-        log.exception("download job %s failed", job_id)
+        log.exception("job %s failed", job_id)
     finally:
         inflight.discard(job_id)
 
@@ -94,13 +102,21 @@ def _claim_jobs(limit: int) -> list[int]:
     return claimed
 
 
-def _download_job_blocking(job_id: int) -> None:
+def _process_job_blocking(job_id: int) -> None:
     with Session(engine) as session:
         job = session.get(Job, job_id)
         if job is None:
             return
+        job_type = job.type
         url = job.url
 
+    if job_type == JobType.playlist:
+        _enumerate_playlist_job(job_id, url)
+    else:
+        _download_video_job(job_id, url)
+
+
+def _download_video_job(job_id: int, url: str) -> None:
     last_write = {"t": 0.0}
 
     def on_progress(pct: float, speed: str | None, eta: str | None) -> None:
@@ -186,4 +202,99 @@ def _save_video(info: dict[str, Any]) -> None:
         video.downloaded_at = _utcnow()
         video.status = VideoStatus.present
         session.add(video)
+        session.commit()
+
+
+# --- playlists --------------------------------------------------------------
+
+
+def _enumerate_playlist_job(job_id: int, url: str) -> None:
+    try:
+        info = enumerate_playlist(url)
+        _save_playlist(info, parent_job_id=job_id)
+        _finish_job(job_id, JobStatus.done, target_id=info.get("id"))
+    except Exception as exc:  # noqa: BLE001 - recorded on the job row
+        _finish_job(job_id, JobStatus.error, error=str(exc))
+        raise
+
+
+def _save_playlist(info: dict[str, Any], *, parent_job_id: int) -> None:
+    """Upsert the Playlist and its ordered entries, then enqueue downloads for
+    any entries not already present or in flight (dedup across playlists)."""
+    pid = info["id"]
+    entries = [e for e in (info.get("entries") or []) if e and e.get("id")]
+
+    with Session(engine) as session:
+        playlist = session.get(Playlist, pid) or Playlist(
+            id=pid, title=info.get("title") or pid
+        )
+        playlist.title = info.get("title") or playlist.title
+        playlist.channel = info.get("uploader") or info.get("channel")
+        playlist.description = info.get("description")
+        playlist.last_synced_at = _utcnow()
+        session.add(playlist)
+        session.commit()
+
+    for position, entry in enumerate(entries):
+        vid = entry["id"]
+        _upsert_placeholder_video(vid, entry.get("title"))
+        _upsert_link(pid, vid, position)
+        if not _video_present(vid) and not _active_video_job(vid):
+            _enqueue_video_job(vid, parent_job_id=parent_job_id)
+
+
+def _upsert_placeholder_video(vid: str, title: str | None) -> None:
+    """Record a not-yet-downloaded entry as a `missing` Video so the playlist
+    view can show it with a title before its file exists."""
+    with Session(engine) as session:
+        video = session.get(Video, vid)
+        if video is None:
+            session.add(Video(id=vid, title=title or vid, status=VideoStatus.missing))
+            session.commit()
+        elif title and (not video.title or video.title == vid):
+            video.title = title
+            session.add(video)
+            session.commit()
+
+
+def _upsert_link(pid: str, vid: str, position: int) -> None:
+    with Session(engine) as session:
+        link = session.get(PlaylistVideo, (pid, vid))
+        if link is None:
+            session.add(PlaylistVideo(playlist_id=pid, video_id=vid, position=position))
+        else:
+            link.position = position
+            session.add(link)
+        session.commit()
+
+
+def _video_present(vid: str) -> bool:
+    with Session(engine) as session:
+        video = session.get(Video, vid)
+        return video is not None and video.status == VideoStatus.present
+
+
+def _active_video_job(vid: str) -> bool:
+    with Session(engine) as session:
+        row = session.exec(
+            select(Job).where(
+                Job.type == JobType.video,
+                Job.target_id == vid,
+                Job.status.in_([JobStatus.queued, JobStatus.running]),
+            )
+        ).first()
+    return row is not None
+
+
+def _enqueue_video_job(vid: str, *, parent_job_id: int) -> None:
+    url = f"https://www.youtube.com/watch?v={vid}"
+    with Session(engine) as session:
+        session.add(
+            Job(
+                type=JobType.video,
+                url=url,
+                target_id=vid,
+                parent_job_id=parent_job_id,
+            )
+        )
         session.commit()

@@ -1,13 +1,26 @@
 {% extends "base.html" %}
 {% block title %}{{ video.title }} · YAM{% endblock %}
 {% block content %}
+{% if playlist %}
+<div class="pl-nav">
+  <a class="back" href="/playlist/{{ playlist.id }}">‹ {{ playlist.title }}</a>
+  {% if next_id %}<a class="btn" href="/watch/{{ next_id }}?list={{ playlist.id }}">Next ▸</a>{% endif %}
+</div>
+{% else %}
 <a class="back" href="/">← Library</a>
+{% endif %}
+
+{% if video.file_path %}
 <div class="player">
   <video controls playsinline preload="metadata" poster="/media/{{ video.id }}/thumbnail">
     <source src="/media/{{ video.id }}" type="{{ mime }}">
     Your browser can't play this file's format ({{ video.ext }}).
   </video>
 </div>
+{% else %}
+<div class="banner">This video hasn't been downloaded yet.</div>
+{% endif %}
+
 <h1 class="watch-title">{{ video.title }}</h1>
 <div class="watch-meta">
   {% if video.channel %}<span>{{ video.channel }}</span>{% endif %}

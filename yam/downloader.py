@@ -67,3 +67,18 @@ def download_video(url: str, on_progress: ProgressCb | None = None) -> dict[str,
         info = ydl.extract_info(url, download=True)
     # noplaylist=True guarantees a single-video info dict here.
     return info
+
+
+def enumerate_playlist(url: str) -> dict[str, Any]:
+    """Cheaply list a playlist's entries (no per-video network calls, no
+    download). Returns yt-dlp's playlist info dict, with ``entries``."""
+    opts: dict[str, Any] = {
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "quiet": True,
+        "no_warnings": True,
+    }
+    if settings.cookies_file:
+        opts["cookiefile"] = settings.cookies_file
+    with YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=False)

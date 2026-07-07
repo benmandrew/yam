@@ -9,11 +9,14 @@ data model, milestones, and locked choices. Update `PLAN.md` when scope changes.
 
 ## Status
 
-Milestones 1–3 are done: Nix/Docker/Tailscale scaffolding + DB schema (M1);
+Milestones 1–4 (MVP) are done: Nix/Docker/Tailscale scaffolding + DB schema (M1);
 single-video downloads via the background worker with a live `/downloads` page
-(M2); and playback — `/media/{id}` Range streaming, `/watch/{id}` native `<video>`
-player, and the thumbnail library grid (M3). **Playlists are next (Milestone 4):**
-`POST /api/download` currently rejects playlist URLs with a "coming in M4" message.
+(M2); playback — `/media/{id}` Range streaming, `/watch/{id}` native `<video>`
+player, thumbnail library grid (M3); and playlists — enumeration, ordered
+`playlist_video` links, per-entry child jobs with dedup across playlists,
+`/playlist/{id}` view, and manual "Next ▸" playback (M4). Not-yet-downloaded
+playlist entries are stored as `missing` Video rows (hidden from the library,
+shown as "pending" in the playlist). Remaining: management/polish (PLAN.md M5–6).
 
 ## Structure
 

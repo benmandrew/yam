@@ -12,14 +12,14 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from .db import engine, init_db
-from .models import Job, JobType, Playlist, Video
+from .models import Job, JobType, Playlist, PlaylistVideo, Video, VideoStatus
 from .urls import classify
 from .worker import run_worker
 
@@ -82,7 +82,11 @@ def healthz() -> dict[str, str]:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     with Session(engine) as session:
-        videos = session.exec(select(Video).order_by(Video.downloaded_at.desc())).all()
+        videos = session.exec(
+            select(Video)
+            .where(Video.status == VideoStatus.present)
+            .order_by(Video.downloaded_at.desc())
+        ).all()
         playlists = session.exec(select(Playlist)).all()
     return templates.TemplateResponse(
         request, "index.html", {"videos": videos, "playlists": playlists}
@@ -95,7 +99,10 @@ def enqueue_download(request: Request, url: str = Form(...)):
     kind, ident = classify(url)
 
     if kind == "playlist":
-        return _redirect_downloads("Playlist downloads arrive in Milestone 4.")
+        with Session(engine) as session:
+            session.add(Job(type=JobType.playlist, url=url, target_id=ident))
+            session.commit()
+        return _redirect_downloads("Playlist queued — enumerating videos…")
 
     if kind == "video" and ident and _video_present(ident):
         return _redirect_downloads("That video is already archived.")
@@ -121,15 +128,48 @@ def jobs_partial(request: Request):
 
 
 @app.get("/watch/{video_id}", response_class=HTMLResponse)
-def watch(request: Request, video_id: str):
+def watch(
+    request: Request,
+    video_id: str,
+    list_id: str | None = Query(default=None, alias="list"),
+):
     with Session(engine) as session:
         video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
+        if video is None:
+            raise HTTPException(status_code=404, detail="Video not found")
+        playlist = session.get(Playlist, list_id) if list_id else None
+        next_id = _next_in_playlist(session, list_id, video_id) if playlist else None
     return templates.TemplateResponse(
         request,
         "watch.html",
-        {"video": video, "mime": _mime_for(video.ext)},
+        {
+            "video": video,
+            "mime": _mime_for(video.ext),
+            "playlist": playlist,
+            "next_id": next_id,
+        },
+    )
+
+
+@app.get("/playlist/{playlist_id}", response_class=HTMLResponse)
+def playlist_view(request: Request, playlist_id: str):
+    with Session(engine) as session:
+        playlist = session.get(Playlist, playlist_id)
+        if playlist is None:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        links = session.exec(
+            select(PlaylistVideo)
+            .where(PlaylistVideo.playlist_id == playlist_id)
+            .order_by(PlaylistVideo.position)
+        ).all()
+        videos = [session.get(Video, link.video_id) for link in links]
+    first_present = next(
+        (v.id for v in videos if v and v.status == VideoStatus.present), None
+    )
+    return templates.TemplateResponse(
+        request,
+        "playlist.html",
+        {"playlist": playlist, "videos": videos, "first_present": first_present},
     )
 
 
@@ -167,5 +207,26 @@ def _redirect_downloads(msg: str) -> RedirectResponse:
 
 
 def _video_present(video_id: str) -> bool:
+    """True only if the video is actually downloaded (not just a playlist
+    placeholder row with status=missing)."""
     with Session(engine) as session:
-        return session.get(Video, video_id) is not None
+        video = session.get(Video, video_id)
+    return video is not None and video.status == VideoStatus.present
+
+
+def _next_in_playlist(
+    session: Session, playlist_id: str | None, current_id: str
+) -> str | None:
+    if not playlist_id:
+        return None
+    links = session.exec(
+        select(PlaylistVideo)
+        .where(PlaylistVideo.playlist_id == playlist_id)
+        .order_by(PlaylistVideo.position)
+    ).all()
+    ids = [link.video_id for link in links]
+    if current_id in ids:
+        index = ids.index(current_id)
+        if index + 1 < len(ids):
+            return ids[index + 1]
+    return None
