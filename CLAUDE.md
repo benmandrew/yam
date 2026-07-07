@@ -33,7 +33,9 @@ flush as the Playlist/Video it references — commit the parents first (the work
 ## Structure
 
 ```
-flake.nix              Nix flake — the single source of dependency truth
+flake.nix              Nix flake — dev shell + `nix run` (dev dependency source)
+Dockerfile             Production image build (python:slim + ffmpeg + pip)
+requirements.txt       Image Python deps (keep ~in sync with flake pythonEnv)
 yam/
   config.py            Env-driven settings (plain dataclass, no pydantic-settings)
   db.py                SQLite engine, WAL/foreign-key pragmas, init_db()
@@ -41,16 +43,17 @@ yam/
   main.py              FastAPI app: lifespan init, routes, static/template mounts
   templates/           Jinja2 (base.html + index.html); htmx planned for M2+
   static/style.css     Dark library UI
-docker-compose.yml     Deploy: yam + Tailscale sidecar (tailnet-only)
-tailscale/serve.json   HTTPS via `tailscale serve` (Funnel stays off)
+docker-compose.yml           Deploy: single container, publishes 8080; front with
+                             host TLS (e.g. host-level `tailscale serve`)
 PLAN.md                Architecture, data model, milestones
 ```
 
 ## Conventions
 
-- **Nix is the only dependency manager.** No `pip`, no `requirements.txt`, no
-  Dockerfile. Add a Python/runtime dep by editing `pythonEnv`/`runtimeDeps` in
-  `flake.nix` (packages come from nixpkgs).
+- **Two dependency sources, kept in sync:** the Nix flake `pythonEnv` for dev
+  (`nix develop` / `nix run`), and `requirements.txt` for the production image
+  (`Dockerfile`). Bump both together when changing deps. ffmpeg is a runtime dep
+  (flake `runtimeDeps`; `apt-get` in the Dockerfile).
 - **Videos are stored once, keyed by YouTube id**; playlists reference them
   through the `playlist_video` link table (a video in N playlists = one file).
 - **Prefer H.264/AAC mp4, no re-encode** (for Safari/iOS + universal playback;
@@ -73,7 +76,7 @@ nix develop                                  # devShell (python env + ffmpeg + r
 | Run (dev, hot reload) | `uvicorn yam.main:app --reload --port 8080` |
 | Run packaged app | `nix run .#yam` (honors `MEDIA_DIR`/`DATA_DIR`) |
 | Build app | `nix build .#yam` |
-| Build container image (Linux only) | `nix build .#docker && docker load < result` |
+| Build container image | `docker build -t yam:latest .` |
 | Lint | `ruff check .` |
 | Format Python | `ruff format .` |
 | Format Nix | `nix fmt` (nixpkgs-fmt) |
@@ -82,5 +85,4 @@ nix develop                                  # devShell (python env + ffmpeg + r
 In the devShell, `MEDIA_DIR`/`DATA_DIR` default to `./.local/*`.
 
 **Note:** the Nix flake only sees git-tracked files — `git add` new files before
-`nix build`/`nix flake check` or they won't be in the build. The container image
-is a Linux image; building `.#docker` on macOS fails without a Linux builder.
+`nix build`/`nix flake check` or they won't be in the build.

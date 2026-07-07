@@ -47,30 +47,13 @@
           '';
         };
 
-        # Container image, built from the same package set. Linux-only:
-        # dockerTools cannot cross-build a Linux image from darwin without a
-        # remote/linux builder, so we only expose it on Linux systems.
-        dockerImage = pkgs.dockerTools.buildLayeredImage {
-          name = "yam";
-          tag = "latest";
-          contents = [ yam pythonEnv pkgs.ffmpeg pkgs.cacert ];
-          config = {
-            Cmd = [ "${yam}/bin/yam" ];
-            ExposedPorts = { "8080/tcp" = { }; };
-            Env = [
-              "MEDIA_DIR=/media"
-              "DATA_DIR=/data"
-              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-            ];
-          };
-        };
+        # The container image is built from the Dockerfile (see README), so it
+        # works with any `docker build` and needs no Linux Nix builder.
       in
       {
         packages = {
           default = yam;
           yam = yam;
-        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          docker = dockerImage;
         };
 
         formatter = pkgs.nixpkgs-fmt;

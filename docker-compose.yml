@@ -1,49 +1,34 @@
-# YAM deployment: the app joins your tailnet via a Tailscale sidecar and is
-# reachable only from your own devices (no ports published to the host/LAN).
+# Yam deployment: a single container that publishes port 8080 to the host. Yam
+# listens on 0.0.0.0:8080 inside the container and speaks plain HTTP — put TLS /
+# access control in front of it on the host.
 #
-# Build & load the image first (on a Linux host, or a Linux remote builder):
-#   nix build .#docker && docker load < result
+# If the host is already a tailnet node, host-level `tailscale serve` fronts it
+# with HTTPS on the tailnet:
+#     tailscale serve --bg --https=8449 http://127.0.0.1:8080
+#     # -> https://<host>.<tailnet>.ts.net:8449
 #
-# Then provide TS_AUTHKEY (see .env.example) and: docker compose up -d
-# The service appears on your tailnet as http://yam.<tailnet>.ts.net:8080
+# Build the image first (any Docker host — see Dockerfile):
+#     docker build -t yam:latest .    (or: docker compose build)
 
 services:
-  tailscale:
-    image: tailscale/tailscale:latest
-    hostname: yam                       # -> yam.<tailnet>.ts.net
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env}
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_USERSPACE: "false"
-      # Serve the app over HTTPS on the tailnet (Funnel stays OFF).
-      TS_SERVE_CONFIG: /config/serve.json
-    volumes:
-      - ts-state:/var/lib/tailscale
-      - ./tailscale/serve.json:/config/serve.json:ro
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - net_admin
-    restart: unless-stopped
-
   yam:
-    image: yam:latest                   # built via `nix build .#docker`
-    network_mode: service:tailscale     # share the tailnet identity
-    depends_on:
-      - tailscale
+    build: .
+    image: yam:latest                 # or the published image, e.g. youruser/yam:latest
+    restart: unless-stopped
     environment:
       MEDIA_DIR: /media
       DATA_DIR: /data
       MAX_CONCURRENT_DOWNLOADS: "2"
       DOWNLOAD_SUBTITLES: "false"
+      # Optional: mount a cookies.txt into /data and set COOKIES_FILE=/data/cookies.txt
+    ports:
+      # host:container. In production bind to a specific (e.g. tailnet) IP:
+      #   - "100.x.y.z:8086:8080"
+      - "8080:8080"
     volumes:
       - media:/media
       - data:/data
-      # Optional: mount a cookies.txt for age-restricted/members content and
-      # set COOKIES_FILE=/data/cookies.txt in this environment block.
-    restart: unless-stopped
 
 volumes:
-  ts-state:
   media:
   data:

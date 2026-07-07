@@ -4,9 +4,8 @@ Self-hosted app to archive YouTube **videos and playlists** by link, store them
 locally, and play them back through one web interface. See [PLAN.md](./PLAN.md)
 for the full design and roadmap.
 
-> **Status:** Milestone 1 (skeleton). Library page, health check, DB schema, and
-> the Nix/Docker/Tailscale scaffolding are in place. Downloading and playback
-> arrive in Milestones 2–4.
+> **Status:** Milestones 1–6 done — downloads, playback, playlists, library/job
+> management, and playlist sync. See [PLAN.md](./PLAN.md) for the remaining roadmap.
 
 ## Requirements
 
@@ -28,29 +27,35 @@ You can also run the packaged app directly, without a shell:
 MEDIA_DIR=./.local/media DATA_DIR=./.local/data nix run .#yam
 ```
 
-## Build the container image
+## Build & publish the container image
 
-The image is built by Nix from the same dependency set (no Dockerfile). Because
-`dockerTools` produces a **Linux** image, build it on Linux (or with a Linux
-remote builder — building `.#docker` on macOS will fail):
+The image is built from the `Dockerfile` (works on any Docker host):
 
 ```sh
-nix build .#docker
-docker load < result          # loads yam:latest
+docker build -t yam:latest .
 ```
 
-## Deploy (Tailscale-only)
+CI (`.github/workflows/docker-publish.yml`) builds and **pushes to Docker Hub**
+on every push to `main` and on `v*` tags. Set two repo secrets:
 
-The app is exposed **only on your tailnet** via a Tailscale sidecar — nothing is
-published to the host or LAN.
+- `DOCKERHUB_USERNAME` — your Docker Hub username (also the image namespace)
+- `DOCKERHUB_TOKEN` — a Docker Hub access token
+
+The published image is `docker.io/<DOCKERHUB_USERNAME>/yam` (tags: `latest`, the
+git tag, and the short commit SHA). Reference it as the `image:` in compose.
+
+## Deploy
+
+`docker-compose.yml` runs a single container and publishes port **8080**; Yam
+speaks plain HTTP, so put TLS / access control in front of it. If the host is
+already a tailnet node, front it with host-level `tailscale serve` (any reverse
+proxy works too):
 
 ```sh
-cp .env.example .env          # add your TS_AUTHKEY
+tailscale serve --bg --https=8449 http://127.0.0.1:8080
+#   -> https://<host>.<tailnet>.ts.net:8449
 docker compose up -d
 ```
-
-It appears on your tailnet as `yam` — reachable at `https://yam.<tailnet>.ts.net`
-(HTTPS via `tailscale serve`; Tailscale Funnel is intentionally left off).
 
 ## Configuration
 

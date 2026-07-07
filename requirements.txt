@@ -1,0 +1,10 @@
+# Production image dependencies (see Dockerfile). Keep roughly in sync with the
+# Nix flake's pythonEnv when bumping. Pins match the versions the flake resolves.
+fastapi==0.136.3
+uvicorn==0.40.0
+sqlmodel==0.0.38
+jinja2==3.1.5
+python-multipart==0.0.29
+# yt-dlp is intentionally unpinned: it needs to track YouTube changes, so image
+# rebuilds should pull the latest.
+yt-dlp
