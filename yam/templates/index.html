@@ -4,9 +4,19 @@
 <section>
   <h2>Videos</h2>
   {% if videos %}
-    <ul class="grid">
+    <ul class="cards">
       {% for v in videos %}
-        <li><a href="/watch/{{ v.id }}">{{ v.title }}</a></li>
+      <li class="card">
+        <a href="/watch/{{ v.id }}">
+          <div class="thumb">
+            <img loading="lazy" src="/media/{{ v.id }}/thumbnail" alt=""
+                 onerror="this.style.visibility='hidden'">
+            {% if v.duration_s %}<span class="thumb-dur">{{ v.duration_s | duration }}</span>{% endif %}
+          </div>
+          <div class="card-title">{{ v.title }}</div>
+          <div class="card-sub">{% if v.channel %}{{ v.channel }}{% endif %}</div>
+        </a>
+      </li>
       {% endfor %}
     </ul>
   {% else %}
@@ -17,9 +27,9 @@
 <section>
   <h2>Playlists</h2>
   {% if playlists %}
-    <ul class="grid">
+    <ul class="cards">
       {% for p in playlists %}
-        <li><a href="/playlist/{{ p.id }}">{{ p.title }}</a></li>
+      <li class="card"><a href="/playlist/{{ p.id }}"><div class="card-title">{{ p.title }}</div></a></li>
       {% endfor %}
     </ul>
   {% else %}

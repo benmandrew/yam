@@ -20,10 +20,11 @@ ProgressCb = Callable[[float, str | None, str | None], None]
 
 def _ydl_opts(progress_hook: Callable[[dict], None]) -> dict[str, Any]:
     opts: dict[str, Any] = {
-        # Highest quality, original codecs, no re-encode; merge into mkv so any
-        # codec combination (VP9/AV1 + Opus, H.264 + AAC) is preserved.
+        # Highest quality, original codecs, no re-encode. Prefer a browser-
+        # playable container: webm (VP9/AV1 + Opus/Vorbis), else mp4 (H.264 +
+        # AAC), else mkv as a last resort for exotic codec mixes.
         "format": "bv*+ba/b",
-        "merge_output_format": "mkv",
+        "merge_output_format": "webm/mp4/mkv",
         "outtmpl": {"default": str(settings.videos_dir / "%(id)s" / "%(id)s.%(ext)s")},
         "writethumbnail": True,
         "writeinfojson": True,

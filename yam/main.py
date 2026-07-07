@@ -1,18 +1,19 @@
 """FastAPI application entry point.
 
-Milestone 2: real single-video downloads via a background worker, a live
-downloads/progress page, and the library. Playback (watch pages) and playlists
-arrive in Milestones 3–4.
+Covers downloads (single-video via the background worker + live /downloads page)
+and playback (/media Range streaming, /watch player, thumbnail library grid).
+Playlists arrive in Milestone 4.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -24,6 +25,37 @@ from .worker import run_worker
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# Container -> MIME for the <video> source. mkv has no reliable browser MIME;
+# it is only a last-resort fallback container (see downloader.py).
+_MIME_BY_EXT = {
+    "webm": "video/webm",
+    "mp4": "video/mp4",
+    "m4v": "video/mp4",
+    "mkv": "video/x-matroska",
+}
+
+
+def _mime_for(ext: str | None) -> str:
+    return _MIME_BY_EXT.get((ext or "").lower(), "application/octet-stream")
+
+
+def _fmt_ytdate(value: str | None) -> str:
+    if value and len(value) == 8 and value.isdigit():
+        return f"{value[0:4]}-{value[4:6]}-{value[6:8]}"
+    return value or ""
+
+
+def _fmt_duration(seconds: int | None) -> str:
+    if not seconds:
+        return ""
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+templates.env.filters["ytdate"] = _fmt_ytdate
+templates.env.filters["duration"] = _fmt_duration
 
 
 @asynccontextmanager
@@ -86,6 +118,43 @@ def jobs_partial(request: Request):
             select(Job).order_by(Job.created_at.desc()).limit(100)
         ).all()
     return templates.TemplateResponse(request, "_jobs.html", {"jobs": jobs})
+
+
+@app.get("/watch/{video_id}", response_class=HTMLResponse)
+def watch(request: Request, video_id: str):
+    with Session(engine) as session:
+        video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return templates.TemplateResponse(
+        request,
+        "watch.html",
+        {"video": video, "mime": _mime_for(video.ext)},
+    )
+
+
+@app.get("/media/{video_id}")
+def media(video_id: str):
+    """Stream the video file. FileResponse honors Range headers, so the
+    browser can seek (206 Partial Content)."""
+    with Session(engine) as session:
+        video = session.get(Video, video_id)
+    if video is None or not video.file_path or not os.path.exists(video.file_path):
+        raise HTTPException(status_code=404, detail="Video file not found")
+    return FileResponse(video.file_path, media_type=_mime_for(video.ext))
+
+
+@app.get("/media/{video_id}/thumbnail")
+def thumbnail(video_id: str):
+    with Session(engine) as session:
+        video = session.get(Video, video_id)
+    if (
+        video is None
+        or not video.thumbnail_path
+        or not os.path.exists(video.thumbnail_path)
+    ):
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    return FileResponse(video.thumbnail_path, media_type="image/jpeg")
 
 
 # --- helpers ----------------------------------------------------------------

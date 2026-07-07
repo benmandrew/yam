@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title }} · YAM{% endblock %}
+{% block content %}
+<a class="back" href="/">← Library</a>
+<div class="player">
+  <video controls playsinline preload="metadata" poster="/media/{{ video.id }}/thumbnail">
+    <source src="/media/{{ video.id }}" type="{{ mime }}">
+    Your browser can't play this file's format ({{ video.ext }}).
+  </video>
+</div>
+<h1 class="watch-title">{{ video.title }}</h1>
+<div class="watch-meta">
+  {% if video.channel %}<span>{{ video.channel }}</span>{% endif %}
+  {% if video.upload_date %}<span>{{ video.upload_date | ytdate }}</span>{% endif %}
+  {% if video.duration_s %}<span>{{ video.duration_s | duration }}</span>{% endif %}
+  {% if video.width and video.height %}<span>{{ video.width }}×{{ video.height }}</span>{% endif %}
+  {% if video.ext %}<span class="tag">{{ video.ext }}</span>{% endif %}
+</div>
+{% if video.description %}<pre class="watch-desc">{{ video.description }}</pre>{% endif %}
+{% endblock %}

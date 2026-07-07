@@ -9,9 +9,11 @@ data model, milestones, and locked choices. Update `PLAN.md` when scope changes.
 
 ## Status
 
-Milestone 1 (skeleton) is done: Nix/Docker/Tailscale scaffolding, DB schema,
-`/healthz`, and the library page. Downloading and playback come in Milestones 2–4
-(see `PLAN.md`). The `POST /api/download` route is a 501 stub until Milestone 2.
+Milestones 1–3 are done: Nix/Docker/Tailscale scaffolding + DB schema (M1);
+single-video downloads via the background worker with a live `/downloads` page
+(M2); and playback — `/media/{id}` Range streaming, `/watch/{id}` native `<video>`
+player, and the thumbnail library grid (M3). **Playlists are next (Milestone 4):**
+`POST /api/download` currently rejects playlist URLs with a "coming in M4" message.
 
 ## Structure
 
@@ -36,7 +38,8 @@ PLAN.md                Architecture, data model, milestones
   `flake.nix` (packages come from nixpkgs).
 - **Videos are stored once, keyed by YouTube id**; playlists reference them
   through the `playlist_video` link table (a video in N playlists = one file).
-- **Highest quality, no re-encode** (`bv*+ba/b`, merged to mkv) — see `PLAN.md`.
+- **Highest quality, no re-encode** (`bv*+ba/b`, merged to a browser-playable
+  container `webm/mp4/mkv`) — see `PLAN.md`.
 - **Starlette gotcha:** use the modern `templates.TemplateResponse(request, name,
   context)` signature. The old `(name, {"request": ...})` form raises
   `TypeError: unhashable type: 'dict'` on the pinned Starlette.

@@ -73,10 +73,12 @@ another playlist just creates the `playlist_video` link — no re-download.
 ## yt-dlp integration
 
 - **Format (highest quality, original codecs):**
-  `bv*+ba/b` — the best video + best audio available, **no quality cap**. Merge into
-  `mkv` (`--merge-output-format mkv`) so any codec combo (VP9/AV1 + Opus, or H.264 + AAC)
-  is preserved losslessly. **Never re-encode** — muxing only, so downloads stay fast and
-  full-quality. Above 1080p this means VP9/AV1 in webm/mkv (YouTube offers no MP4 there).
+  `bv*+ba/b` — the best video + best audio available, **no quality cap**. Merge into a
+  **browser-playable container**, preferring `webm/mp4/mkv`
+  (`--merge-output-format "webm/mp4/mkv"`): webm for VP9/AV1 + Opus, mp4 for H.264 + AAC,
+  mkv only as a last resort for exotic codec mixes. **Never re-encode** — muxing only, so
+  downloads stay fast and full-quality. (mkv was the original choice, but browsers won't
+  reliably play the mkv *container* in `<video>`, so we prefer webm/mp4.)
 - **Metadata:** `writeinfojson`, `writethumbnail` + convert to jpg, capture description,
   upload date, channel, duration, resolution from the info dict.
 - **Output template:** store by id to avoid filename headaches:
@@ -200,7 +202,7 @@ MVP = milestones 1–4. Ship those, then iterate on 5–6.
 ## Decisions (locked)
 
 - **Quality:** always highest available, original codecs, **no re-encode** (`bv*+ba/b`,
-  merge to mkv). Accepts VP9/AV1 mkv/webm and its playback caveats.
+  merge to `webm/mp4/mkv`). Accepts VP9/AV1 in webm and its playback caveats.
 - **"Play all":** manual next — a "Next ▸" control, no autoplay chaining.
 - **Retention:** full delete — remove files *and* DB rows; protect files still referenced
   by another playlist.
