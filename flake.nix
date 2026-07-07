@@ -73,8 +73,10 @@
           docker = dockerImage;
         };
 
+        formatter = pkgs.nixpkgs-fmt;
+
         devShells.default = pkgs.mkShell {
-          packages = [ pythonEnv pkgs.ffmpeg ];
+          packages = [ pythonEnv pkgs.ffmpeg pkgs.ruff pkgs.nixpkgs-fmt ];
           shellHook = ''
             export MEDIA_DIR="''${MEDIA_DIR:-$PWD/.local/media}"
             export DATA_DIR="''${DATA_DIR:-$PWD/.local/data}"
