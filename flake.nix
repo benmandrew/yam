@@ -13,7 +13,7 @@
 
         # Single source of dependency truth: the Python runtime plus all
         # application libraries, resolved from nixpkgs.
-        pythonEnv = pkgs.python3.withPackages (ps: with ps; [
+        pyDeps = ps: with ps; [
           fastapi
           uvicorn
           jinja2
@@ -21,7 +21,10 @@
           sqlmodel
           yt-dlp
           httpx
-        ]);
+        ];
+        pythonEnv = pkgs.python3.withPackages pyDeps;
+        # Dev/CI env adds pytest (test-only, so it stays out of the app closure).
+        testEnv = pkgs.python3.withPackages (ps: (pyDeps ps) ++ [ ps.pytest ]);
 
         # ffmpeg is needed at runtime for muxing streams into the container.
         runtimeDeps = [ pkgs.ffmpeg ];
@@ -58,8 +61,26 @@
 
         formatter = pkgs.nixpkgs-fmt;
 
+        # `nix flake check` runs lint, format-check, and the pytest suite in a
+        # sandbox (the tests are fully offline). GitHub Actions runs this too.
+        checks.tests = pkgs.runCommand "yam-tests"
+          {
+            nativeBuildInputs = [ testEnv pkgs.ffmpeg pkgs.ruff ];
+          } ''
+          cp -r ${self} src
+          chmod -R +w src
+          cd src
+          export HOME="$TMPDIR"
+          export MEDIA_DIR="$TMPDIR/media" DATA_DIR="$TMPDIR/data"
+          export PYTHONDONTWRITEBYTECODE=1
+          ruff check .
+          ruff format --check .
+          python -m pytest
+          touch $out
+        '';
+
         devShells.default = pkgs.mkShell {
-          packages = [ pythonEnv pkgs.ffmpeg pkgs.ruff pkgs.nixpkgs-fmt ];
+          packages = [ testEnv pkgs.ffmpeg pkgs.ruff pkgs.nixpkgs-fmt ];
           shellHook = ''
             export MEDIA_DIR="''${MEDIA_DIR:-$PWD/.local/media}"
             export DATA_DIR="''${DATA_DIR:-$PWD/.local/data}"

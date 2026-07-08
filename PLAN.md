@@ -1,6 +1,6 @@
 # Yam — roadmap (further work)
 
-Milestones 1–7 are **complete**:
+Milestones 1–8 are **complete**:
 
 - **M1–4 (MVP):** Nix/Docker/Tailscale scaffolding + DB schema; single-video downloads via
   the background worker with a live `/downloads` page; playback (`/media` Range streaming,
@@ -14,9 +14,13 @@ Milestones 1–7 are **complete**:
 - **M7 (ingestion & access polish):** cookies guidance on the bot-check error, WebVTT
   subtitles with a player `<track>`, optional HTTP Basic auth, a `MIN_FREE_SPACE_MB` disk
   guard, and a read-only `/config` view. (Details struck through under Milestone 7 below.)
+- **M8 (testing & CI):** offline `pytest` suite (`tests/`) covering URL classification,
+  dedup, `_save_video`/`_save_playlist`, `/media` Range streaming, and next-in-playlist;
+  `nix flake check` runs ruff + format-check + pytest in a sandbox; GitHub Actions runs it
+  on PRs; structured logging via `yam/logging_config.py`.
 
 Architecture, code structure, and build/format/lint commands live in `CLAUDE.md` and
-`README.md`. **This file now tracks only the remaining work (M8 + backlog).**
+`README.md`. **This file now tracks only the remaining work (the backlog below).**
 
 ## Decisions still in force (respect these)
 
@@ -53,12 +57,17 @@ Architecture, code structure, and build/format/lint commands live in `CLAUDE.md`
 
 ## Milestone 8 — Testing & CI
 
-- **pytest suite:** URL classification, dedup, `_save_video`/`_save_playlist`, `/media`
-  Range streaming, next-in-playlist. (These are currently validated only manually via
-  throwaway scripts.)
-- **CI:** GitHub Actions running `nix flake check`, `ruff check`, and the test suite on PRs.
-- Structured logging configuration.
-- Worth pulling earlier — everything above ships more safely with a test net.
+- ~~**pytest suite:** URL classification, dedup, `_save_video`/`_save_playlist`, `/media`
+  Range streaming, next-in-playlist.~~ **Done:** `tests/` (offline; TestClient runs without
+  the lifespan so the worker/network never start). Test DB/media point at a temp dir set in
+  `tests/conftest.py` before any `yam.*` import.
+- ~~**CI:** GitHub Actions running `nix flake check`, `ruff check`, and the test suite.~~
+  **Done:** `checks.tests` in the flake runs ruff + `ruff format --check` + pytest in a
+  sandbox; `.github/workflows/ci.yml` runs `nix flake check` on PRs and pushes to `main`.
+- ~~Structured logging configuration.~~ **Done:** `yam/logging_config.py` (`LOG_LEVEL`-driven,
+  called from the app lifespan).
+
+**M8 complete.**
 
 ## Backlog (unscheduled)
 

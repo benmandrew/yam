@@ -26,6 +26,7 @@ from . import disk
 from .config import settings
 from .db import engine, init_db
 from .library import delete_playlist, delete_video
+from .logging_config import configure_logging
 from .models import Job, JobStatus, JobType, Playlist, PlaylistVideo, Video, VideoStatus
 from .urls import classify
 from .worker import enqueue_pending_for_playlist, run_worker
@@ -67,6 +68,7 @@ templates.env.filters["duration"] = _fmt_duration
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    configure_logging()
     init_db()
     stop = asyncio.Event()
     worker_task = asyncio.create_task(run_worker(stop))
@@ -215,14 +217,18 @@ def jobs_partial(request: Request):
         ).all()
         # Resolve target ids to Videos/Playlists so rows can show real details
         # (title, channel, thumbnail, duration) instead of the raw URL.
-        video_ids = {j.target_id for j in jobs if j.type == JobType.video and j.target_id}
+        video_ids = {
+            j.target_id for j in jobs if j.type == JobType.video and j.target_id
+        }
         playlist_ids = {
             j.target_id for j in jobs if j.type == JobType.playlist and j.target_id
         }
         videos = (
             {
                 v.id: v
-                for v in session.exec(select(Video).where(Video.id.in_(video_ids))).all()
+                for v in session.exec(
+                    select(Video).where(Video.id.in_(video_ids))
+                ).all()
             }
             if video_ids
             else {}

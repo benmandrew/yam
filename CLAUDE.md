@@ -25,10 +25,22 @@ retry/clear on `/downloads`, and library search + sort.
 M6 (playlist sync & polish) is done: `POST /api/playlists/{id}/sync` re-enumerates and
 prunes removed links (files kept), retry-pending re-queues missing entries, playlist
 cover thumbnails (`/playlist/{id}/thumbnail` = first present entry), and `/downloads`
-nests child video jobs under their parent playlist job. Remaining: PLAN.md M7–8.
+nests child video jobs under their parent playlist job.
+
+M7 (ingestion & access polish) is done: bot-check cookies guidance, WebVTT subtitles,
+optional HTTP Basic auth, `MIN_FREE_SPACE_MB` disk guard, `/config` view.
+
+M8 (testing & CI) is done: offline `pytest` suite in `tests/`, `nix flake check` runs
+ruff + format-check + pytest in a sandbox, GitHub Actions (`.github/workflows/ci.yml`)
+runs it on PRs, and `yam/logging_config.py` provides `LOG_LEVEL`-driven structured
+logging. All milestones complete; see PLAN.md for the remaining backlog.
 
 Note: models have no ORM `Relationship()`, so never insert a PlaylistVideo in the same
 flush as the Playlist/Video it references — commit the parents first (the worker does).
+
+Tests are offline: `conftest.py` points DATA_DIR/MEDIA_DIR at a temp dir before importing
+any `yam.*` module, and the `client` fixture builds a TestClient *without* the lifespan so
+the background worker (and yt-dlp/network) never start.
 
 ## Structure
 
@@ -41,8 +53,11 @@ yam/
   db.py                SQLite engine, WAL/foreign-key pragmas, init_db()
   models.py            SQLModel tables: Video, Playlist, PlaylistVideo, Job
   main.py              FastAPI app: lifespan init, routes, static/template mounts
+  logging_config.py    configure_logging() — LOG_LEVEL-driven, called from lifespan
   templates/           Jinja2 (base.html + index.html); htmx planned for M2+
   static/style.css     Dark library UI
+tests/                 Offline pytest suite (conftest sets temp DATA_DIR/MEDIA_DIR)
+.github/workflows/ci.yml     GitHub Actions: runs `nix flake check` on PRs/pushes
 docker-compose.yml           Deploy: single container, publishes 8080; front with
                              host TLS (e.g. host-level `tailscale serve`)
 PLAN.md                Architecture, data model, milestones
@@ -50,10 +65,11 @@ PLAN.md                Architecture, data model, milestones
 
 ## Conventions
 
-- **Two dependency sources, kept in sync:** the Nix flake `pythonEnv` for dev
+- **Two dependency sources, kept in sync:** the Nix flake `pyDeps` list for dev
   (`nix develop` / `nix run`), and `requirements.txt` for the production image
   (`Dockerfile`). Bump both together when changing deps. ffmpeg is a runtime dep
-  (flake `runtimeDeps`; `apt-get` in the Dockerfile).
+  (flake `runtimeDeps`; `apt-get` in the Dockerfile). Test-only deps (pytest) live
+  in the flake's `testEnv`, not in `requirements.txt` or the app closure.
 - **Videos are stored once, keyed by YouTube id**; playlists reference them
   through the `playlist_video` link table (a video in N playlists = one file).
 - **Prefer H.264/AAC mp4, no re-encode** (for Safari/iOS + universal playback;
@@ -77,10 +93,11 @@ nix develop                                  # devShell (python env + ffmpeg + r
 | Run packaged app | `nix run .#yam` (honors `MEDIA_DIR`/`DATA_DIR`) |
 | Build app | `nix build .#yam` |
 | Build container image | `docker build -t yam:latest .` |
+| Test | `pytest` |
 | Lint | `ruff check .` |
 | Format Python | `ruff format .` |
 | Format Nix | `nix fmt` (nixpkgs-fmt) |
-| Validate whole flake | `nix flake check` |
+| Validate whole flake | `nix flake check` (runs ruff + format-check + pytest) |
 
 In the devShell, `MEDIA_DIR`/`DATA_DIR` default to `./.local/*`.
 
