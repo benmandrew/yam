@@ -1,6 +1,27 @@
 {% macro job_row(job) %}
+{% set d = details.get(job.id) %}
 <div class="job-main">
+  {% if d %}
+  <div class="job-info">
+    {% if job.type.value == 'video' and d.thumbnail_path %}
+    <img class="job-thumb" src="/media/{{ d.id }}/thumbnail" alt="" loading="lazy">
+    {% endif %}
+    <div class="job-text">
+      <span class="job-title">{{ d.title }}</span>
+      <span class="job-sub">
+        {% if d.channel %}{{ d.channel }}{% endif %}
+        {% if job.type.value == 'video' and d.duration_s %}
+          {% if d.channel %} · {% endif %}{{ d.duration_s | duration }}
+        {% endif %}
+        {% if job.type.value == 'video' and d.upload_date %}
+          {% if d.channel or d.duration_s %} · {% endif %}{{ d.upload_date | ytdate }}
+        {% endif %}
+      </span>
+    </div>
+  </div>
+  {% else %}
   <span class="job-url">{{ job.url }}</span>
+  {% endif %}
   <span class="badge badge--{{ job.status.value }}">{{ job.status.value }}</span>
 </div>
 {% if job.status.value in ('running', 'queued') %}

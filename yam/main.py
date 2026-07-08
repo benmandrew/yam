@@ -206,12 +206,43 @@ def jobs_partial(request: Request):
         jobs = session.exec(
             select(Job).order_by(Job.created_at.desc()).limit(200)
         ).all()
+        # Resolve target ids to Videos/Playlists so rows can show real details
+        # (title, channel, thumbnail, duration) instead of the raw URL.
+        video_ids = {j.target_id for j in jobs if j.type == JobType.video and j.target_id}
+        playlist_ids = {
+            j.target_id for j in jobs if j.type == JobType.playlist and j.target_id
+        }
+        videos = (
+            {
+                v.id: v
+                for v in session.exec(select(Video).where(Video.id.in_(video_ids))).all()
+            }
+            if video_ids
+            else {}
+        )
+        playlists = (
+            {
+                p.id: p
+                for p in session.exec(
+                    select(Playlist).where(Playlist.id.in_(playlist_ids))
+                ).all()
+            }
+            if playlist_ids
+            else {}
+        )
+
+    def _detail(job: Job):
+        if job.target_id is None:
+            return None
+        return (videos if job.type == JobType.video else playlists).get(job.target_id)
+
     # Nest child video jobs under their parent playlist job.
     children: dict[int, list[Job]] = {}
     for job in jobs:
         if job.parent_job_id is not None:
             children.setdefault(job.parent_job_id, []).append(job)
     top_ids = {job.id for job in jobs if job.parent_job_id is None}
+    details = {job.id: _detail(job) for job in jobs}
     groups = [
         {
             "job": job,
@@ -220,7 +251,9 @@ def jobs_partial(request: Request):
         for job in jobs
         if job.parent_job_id is None or job.parent_job_id not in top_ids
     ]
-    return templates.TemplateResponse(request, "_jobs.html", {"groups": groups})
+    return templates.TemplateResponse(
+        request, "_jobs.html", {"groups": groups, "details": details}
+    )
 
 
 @app.get("/watch/{video_id}", response_class=HTMLResponse)

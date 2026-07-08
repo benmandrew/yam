@@ -113,6 +113,12 @@ h2 { margin: 1.5rem 0 0.75rem; }
 .job-main { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
 .job-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 
+.job-info { display: flex; gap: 0.7rem; align-items: center; min-width: 0; }
+.job-thumb { width: 68px; height: 38px; object-fit: cover; border-radius: 4px; flex: none; background: #2c2352; }
+.job-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.job-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.job-sub { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .badge {
   font-size: 0.72rem;
   text-transform: uppercase;
