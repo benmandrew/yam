@@ -114,6 +114,13 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    # Browsers (and some proxies) probe /favicon.ico at the site root and ignore
+    # the <link rel="icon"> tag, so serve the PNG here too.
+    return FileResponse(BASE_DIR / "static" / "favicon.png", media_type="image/png")
+
+
 _SORTS = {
     "uploaded": Video.upload_date.desc(),
     "added": Video.downloaded_at.desc(),
