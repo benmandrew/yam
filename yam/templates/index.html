@@ -18,9 +18,23 @@
 <section>
   <h2>Videos</h2>
   {% if videos %}
+    <form id="bulk-form" method="post" class="bulk-toolbar">
+      {% if custom_playlists %}
+      <select name="playlist_id">
+        <option value="" selected disabled>Add selected to playlist…</option>
+        {% for cp in custom_playlists %}
+        <option value="{{ cp.id }}">{{ cp.title }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" formaction="/api/videos/bulk-add-to-playlist" class="btn-small">Add to playlist</button>
+      {% endif %}
+      <button type="submit" formaction="/api/videos/bulk-delete" class="btn-danger"
+              onclick="return confirm('Delete the selected videos? This can\'t be undone.')">Delete selected</button>
+    </form>
     <ul class="cards">
       {% for v in videos %}
       <li class="card">
+        <input type="checkbox" name="video_ids" value="{{ v.id }}" form="bulk-form" class="card-select">
         <a href="/watch/{{ v.id }}">
           <div class="thumb">
             <img loading="lazy" src="/media/{{ v.id }}/thumbnail" alt=""

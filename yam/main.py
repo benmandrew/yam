@@ -422,6 +422,40 @@ def remove_video_from_playlist_route(playlist_id: str, video_id: str):
     return _redirect(f"/playlist/{playlist_id}", msg)
 
 
+@app.post("/api/videos/bulk-add-to-playlist")
+def bulk_add_to_playlist(
+    video_ids: list[str] = Form(default=[]), playlist_id: str = Form(...)
+):
+    if not video_ids:
+        return _redirect("/", "No videos selected.")
+    added = 0
+    for vid in video_ids:
+        ok, _msg = add_video_to_playlist(playlist_id, vid)
+        if ok:
+            added += 1
+    skipped = len(video_ids) - added
+    msg = f"Added {added} video(s) to the playlist."
+    if skipped:
+        msg += f" {skipped} skipped (already in it or unavailable)."
+    return _redirect("/", msg)
+
+
+@app.post("/api/videos/bulk-delete")
+def bulk_delete(video_ids: list[str] = Form(default=[])):
+    if not video_ids:
+        return _redirect("/", "No videos selected.")
+    deleted = 0
+    for vid in video_ids:
+        ok, _msg = delete_video(vid)
+        if ok:
+            deleted += 1
+    skipped = len(video_ids) - deleted
+    msg = f"Deleted {deleted} video(s)."
+    if skipped:
+        msg += f" {skipped} skipped (still referenced by a playlist)."
+    return _redirect("/", msg)
+
+
 @app.get("/media/{video_id}")
 def media(video_id: str):
     """Stream the video file. FileResponse honors Range headers, so the
