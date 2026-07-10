@@ -275,6 +275,49 @@ h2 { margin: 1.5rem 0 0.75rem; }
 }
 
 .playlist-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+
+/* Custom playlists */
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.section-head h2 { margin: 0; }
+.section-head form { display: flex; gap: 0.5rem; }
+.section-head input[type="text"] {
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #3a2f63;
+  background: var(--panel);
+  color: var(--fg);
+}
+.badge-custom {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  background: var(--pink);
+  color: #2a0f22;
+}
+select[name="playlist_id"] {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #3a2f63;
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+  margin-top: 0.4rem;
+}
+.card select[name="playlist_id"] {
+  width: calc(100% - 1.4rem);
+  margin: 0.4rem 0.7rem 0.7rem;
+}
+.btn-remove {
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+}
 .downloads-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 
 .job-children {

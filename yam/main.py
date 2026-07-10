@@ -25,9 +25,24 @@ from sqlmodel import Session, select
 from . import disk
 from .config import settings
 from .db import engine, init_db
-from .library import delete_playlist, delete_video
+from .library import (
+    add_video_to_playlist,
+    create_custom_playlist,
+    delete_playlist,
+    delete_video,
+    remove_video_from_playlist,
+)
 from .logging_config import configure_logging
-from .models import Job, JobStatus, JobType, Playlist, PlaylistVideo, Video, VideoStatus
+from .models import (
+    Job,
+    JobStatus,
+    JobType,
+    Playlist,
+    PlaylistOrigin,
+    PlaylistVideo,
+    Video,
+    VideoStatus,
+)
 from .urls import classify
 from .worker import enqueue_pending_for_playlist, run_worker
 
@@ -155,6 +170,7 @@ def index(
             )
             for p in playlists
         }
+    custom_playlists = [p for p in playlists if p.origin == PlaylistOrigin.custom]
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -162,6 +178,7 @@ def index(
             "videos": videos,
             "playlists": playlists,
             "playlist_counts": playlist_counts,
+            "custom_playlists": custom_playlists,
             "q": q or "",
             "sort": sort,
             "msg": msg,
@@ -281,6 +298,9 @@ def watch(
             raise HTTPException(status_code=404, detail="Video not found")
         playlist = session.get(Playlist, list_id) if list_id else None
         next_id = _next_in_playlist(session, list_id, video_id) if playlist else None
+        custom_playlists = session.exec(
+            select(Playlist).where(Playlist.origin == PlaylistOrigin.custom)
+        ).all()
     return templates.TemplateResponse(
         request,
         "watch.html",
@@ -289,6 +309,7 @@ def watch(
             "mime": _mime_for(video.ext),
             "playlist": playlist,
             "next_id": next_id,
+            "custom_playlists": custom_playlists,
         },
     )
 
@@ -305,6 +326,8 @@ def playlist_view(request: Request, playlist_id: str):
             .order_by(PlaylistVideo.position)
         ).all()
         videos = [session.get(Video, link.video_id) for link in links]
+    if playlist.origin == PlaylistOrigin.custom:
+        videos.sort(key=lambda v: (v.upload_date or "") if v else "")
     first_present = next(
         (v.id for v in videos if v and v.status == VideoStatus.present), None
     )
@@ -339,8 +362,13 @@ def playlist_thumbnail(playlist_id: str):
 @app.post("/api/playlists/{playlist_id}/sync")
 def sync_playlist(playlist_id: str):
     with Session(engine) as session:
-        if session.get(Playlist, playlist_id) is None:
+        playlist = session.get(Playlist, playlist_id)
+        if playlist is None:
             raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.origin == PlaylistOrigin.custom:
+            return _redirect(
+                f"/playlist/{playlist_id}", "Sync isn't available for custom playlists."
+            )
         url = f"https://www.youtube.com/playlist?list={playlist_id}"
         session.add(Job(type=JobType.playlist, url=url, target_id=playlist_id))
         session.commit()
@@ -349,8 +377,37 @@ def sync_playlist(playlist_id: str):
 
 @app.post("/api/playlists/{playlist_id}/retry")
 def retry_playlist(playlist_id: str):
+    with Session(engine) as session:
+        playlist = session.get(Playlist, playlist_id)
+        if playlist is None:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.origin == PlaylistOrigin.custom:
+            return _redirect(
+                f"/playlist/{playlist_id}",
+                "Retry isn't available for custom playlists.",
+            )
     queued = enqueue_pending_for_playlist(playlist_id)
     return _redirect(f"/playlist/{playlist_id}", f"Queued {queued} pending video(s).")
+
+
+@app.post("/api/playlists")
+def create_playlist_route(title: str = Form(...)):
+    playlist = create_custom_playlist(title)
+    return _redirect(f"/playlist/{playlist.id}", f"Created “{playlist.title}”.")
+
+
+@app.post("/api/videos/{video_id}/add-to-playlist")
+def add_video_to_playlist_route(
+    video_id: str, playlist_id: str = Form(...), next_path: str = Form("/")
+):
+    _ok, msg = add_video_to_playlist(playlist_id, video_id)
+    return _redirect(next_path, msg)
+
+
+@app.post("/api/playlists/{playlist_id}/videos/{video_id}/remove")
+def remove_video_from_playlist_route(playlist_id: str, video_id: str):
+    _ok, msg = remove_video_from_playlist(playlist_id, video_id)
+    return _redirect(f"/playlist/{playlist_id}", msg)
 
 
 @app.get("/media/{video_id}")

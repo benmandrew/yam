@@ -76,6 +76,18 @@ Architecture, code structure, and build/format/lint commands live in `CLAUDE.md`
 - Optional video.js player (subtitle/quality UI) in place of native `<video>`.
 - Bulk actions (multi-select delete).
 
+## Custom playlists
+
+**Done:** user-created playlists (`Playlist.origin`, nullable/default-less for safe
+auto-migration — `None` reads as `youtube`) alongside YouTube-sourced ones. Created via a
+small form on `/` (`POST /api/playlists`), populated by adding already-archived videos from
+the `/` grid or `/watch/{id}` (`POST /api/videos/{id}/add-to-playlist`), and removed one at a
+time from `/playlist/{id}` (`POST /api/playlists/{id}/videos/{id}/remove`). Custom playlists
+always display sorted by the video's original YouTube upload date (no manual reorder), are
+visually badged as "Custom" everywhere playlists are listed, and skip Sync/Retry (YouTube-only
+concepts). Deleting a custom playlist never orphan-deletes its videos — see
+`yam/library.py::delete_playlist`.
+
 ## Explicit non-goals (unchanged)
 
 - Channel-wide auto-subscription/sync.

@@ -33,6 +33,18 @@
   {% if video.width and video.height %}<span>{{ video.width }}×{{ video.height }}</span>{% endif %}
   {% if video.ext %}<span class="tag">{{ video.ext }}</span>{% endif %}
 </div>
+{% if custom_playlists %}
+<form method="post" action="/api/videos/{{ video.id }}/add-to-playlist">
+  <input type="hidden" name="next_path"
+         value="{% if playlist %}/watch/{{ video.id }}?list={{ playlist.id }}{% else %}/watch/{{ video.id }}{% endif %}">
+  <select name="playlist_id" onchange="this.form.submit()">
+    <option value="" selected disabled>+ Add to playlist…</option>
+    {% for cp in custom_playlists %}
+    <option value="{{ cp.id }}">{{ cp.title }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% endif %}
 {% if video.description %}<pre class="watch-desc">{{ video.description }}</pre>{% endif %}
 
 <form class="danger-form" method="post" action="/api/videos/{{ video.id }}/delete"

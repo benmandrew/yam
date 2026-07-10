@@ -37,6 +37,11 @@ class JobStatus(str, Enum):
     skipped = "skipped"
 
 
+class PlaylistOrigin(str, Enum):
+    youtube = "youtube"
+    custom = "custom"
+
+
 class PlaylistVideo(SQLModel, table=True):
     """Association between a playlist and a video, preserving playlist order."""
 
@@ -76,6 +81,9 @@ class Playlist(SQLModel, table=True):
     thumbnail_path: Optional[str] = None
     added_at: datetime = Field(default_factory=_utcnow)
     last_synced_at: Optional[datetime] = None
+    # Nullable/default-less so `_add_missing_columns` can auto-migrate existing
+    # SQLite DBs (see db.py). Treat None as PlaylistOrigin.youtube everywhere.
+    origin: Optional[PlaylistOrigin] = None
 
 
 class Job(SQLModel, table=True):

@@ -3,7 +3,7 @@
 {% block content %}
 <a class="back" href="/">← Library</a>
 <div class="playlist-head">
-  <h1>{{ playlist.title }}</h1>
+  <h1>{{ playlist.title }}{% if playlist.origin == 'custom' %} <span class="badge badge-custom">Custom playlist</span>{% endif %}</h1>
   <div class="watch-meta">
     {% if playlist.channel %}<span>{{ playlist.channel }}</span>{% endif %}
     <span>{{ videos | length }} videos</span>
@@ -12,14 +12,16 @@
     {% if first_present %}
     <a class="btn" href="/watch/{{ first_present }}?list={{ playlist.id }}">▶ Play all</a>
     {% endif %}
+    {% if playlist.origin != 'custom' %}
     <form method="post" action="/api/playlists/{{ playlist.id }}/sync">
       <button type="submit" class="btn-small">Sync</button>
     </form>
     <form method="post" action="/api/playlists/{{ playlist.id }}/retry">
       <button type="submit" class="btn-small">Retry pending</button>
     </form>
+    {% endif %}
     <form method="post" action="/api/playlists/{{ playlist.id }}/delete"
-          onsubmit="return confirm('Delete playlist “{{ playlist.title }}”? Videos not in any other playlist will be deleted too.')">
+          onsubmit="return confirm('Delete playlist “{{ playlist.title }}”?{% if playlist.origin != 'custom' %} Videos not in any other playlist will be deleted too.{% endif %}')">
       <button type="submit" class="btn-danger">Delete playlist</button>
     </form>
   </div>
@@ -44,6 +46,11 @@
       <span class="pl-title">{{ v.title if v else 'Unknown video' }}</span>
       <span class="badge">pending</span>
     </div>
+    {% endif %}
+    {% if playlist.origin == 'custom' and v %}
+    <form method="post" action="/api/playlists/{{ playlist.id }}/videos/{{ v.id }}/remove">
+      <button type="submit" class="btn-small btn-remove" title="Remove from playlist">✕</button>
+    </form>
     {% endif %}
   </li>
   {% endfor %}

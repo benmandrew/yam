@@ -27,6 +27,7 @@ from .models import (
     JobStatus,
     JobType,
     Playlist,
+    PlaylistOrigin,
     PlaylistVideo,
     Video,
     VideoStatus,
@@ -246,7 +247,7 @@ def _save_playlist(info: dict[str, Any], *, parent_job_id: int) -> None:
 
     with Session(engine) as session:
         playlist = session.get(Playlist, pid) or Playlist(
-            id=pid, title=info.get("title") or pid
+            id=pid, title=info.get("title") or pid, origin=PlaylistOrigin.youtube
         )
         playlist.title = info.get("title") or playlist.title
         playlist.channel = info.get("uploader") or info.get("channel")

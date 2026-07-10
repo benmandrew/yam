@@ -34,6 +34,17 @@
             {% if v.upload_date %}{{ v.upload_date | ytdate }}{% endif %}
           </div>
         </a>
+        {% if custom_playlists %}
+        <form method="post" action="/api/videos/{{ v.id }}/add-to-playlist">
+          <input type="hidden" name="next_path" value="/">
+          <select name="playlist_id" onchange="this.form.submit()">
+            <option value="" selected disabled>+ Add to playlist…</option>
+            {% for cp in custom_playlists %}
+            <option value="{{ cp.id }}">{{ cp.title }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -43,7 +54,13 @@
 </section>
 
 <section>
-  <h2>Playlists</h2>
+  <div class="section-head">
+    <h2>Playlists</h2>
+    <form method="post" action="/api/playlists">
+      <input type="text" name="title" placeholder="New playlist name…" required>
+      <button type="submit" class="btn-small">+ New playlist</button>
+    </form>
+  </div>
   {% if playlists %}
     <ul class="cards">
       {% for p in playlists %}
@@ -52,6 +69,7 @@
           <div class="thumb">
             <img loading="lazy" src="/playlist/{{ p.id }}/thumbnail" alt=""
                  onerror="this.style.visibility='hidden'">
+            {% if p.origin == 'custom' %}<span class="badge badge-custom">Custom</span>{% endif %}
             <span class="thumb-dur">{{ playlist_counts[p.id] }} ▸</span>
           </div>
           <div class="card-title">{{ p.title }}</div>
