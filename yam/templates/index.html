@@ -51,6 +51,17 @@
   {% else %}
     <p class="empty">No videos yet. Paste a URL above to archive one.</p>
   {% endif %}
+  {% if total_pages > 1 %}
+  <nav class="pagination">
+    {% if page > 1 %}
+    <a href="/?q={{ q | urlencode }}&sort={{ sort }}&page={{ page - 1 }}">‹ Prev</a>
+    {% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/?q={{ q | urlencode }}&sort={{ sort }}&page={{ page + 1 }}">Next ›</a>
+    {% endif %}
+  </nav>
+  {% endif %}
 </section>
 
 <section>

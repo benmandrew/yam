@@ -19,7 +19,7 @@ from fastapi import FastAPI, Form, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from . import disk
@@ -146,21 +146,31 @@ _SORTS = {
     "largest": Video.filesize.desc(),
 }
 
+_PAGE_SIZE = 60
+
 
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
     q: str | None = None,
     sort: str = "uploaded",
+    page: int = 1,
     msg: str | None = None,
 ):
     stmt = select(Video).where(Video.status == VideoStatus.present)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(Video.title.ilike(like), Video.channel.ilike(like)))
-    stmt = stmt.order_by(_SORTS.get(sort, _SORTS["uploaded"]))
     with Session(engine) as session:
-        videos = session.exec(stmt).all()
+        total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+        total_pages = max(1, -(-total // _PAGE_SIZE))  # ceil division
+        page = min(max(page, 1), total_pages)
+        page_stmt = (
+            stmt.order_by(_SORTS.get(sort, _SORTS["uploaded"]))
+            .offset((page - 1) * _PAGE_SIZE)
+            .limit(_PAGE_SIZE)
+        )
+        videos = session.exec(page_stmt).all()
         playlists = session.exec(select(Playlist)).all()
         playlist_counts = {
             p.id: len(
@@ -181,6 +191,8 @@ def index(
             "custom_playlists": custom_playlists,
             "q": q or "",
             "sort": sort,
+            "page": page,
+            "total_pages": total_pages,
             "msg": msg,
         },
     )

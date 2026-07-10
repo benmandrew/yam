@@ -251,6 +251,24 @@ h2 { margin: 1.5rem 0 0.75rem; }
   cursor: pointer;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  color: var(--muted);
+}
+.pagination a {
+  border: 1px solid #3a2f63;
+  background: var(--panel);
+  color: var(--fg);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.pagination a:hover { background: var(--accent); color: #fff; }
+
 .btn-danger {
   border: 1px solid #7a3550;
   background: transparent;

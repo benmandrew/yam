@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from yam.db import engine
-from yam.main import _next_in_playlist
+from yam.main import _PAGE_SIZE, _next_in_playlist
 from yam.models import Job, JobType, Playlist, PlaylistVideo, Video, VideoStatus
 
 CONTENT = bytes(range(256)) * 8  # 2048 bytes of known data
@@ -21,6 +21,24 @@ def _add_present_video(vid: str, tmp_path, ext: str = "mp4") -> Video:
         s.add(v)
         s.commit()
     return v
+
+
+def _add_video_rows(n: int, prefix: str = "v", channel: str | None = None) -> None:
+    """Insert `n` present Video rows directly, with no backing file — the
+    index page only needs DB rows to exercise pagination, and thumbnails are
+    fetched lazily by the browser, not by these route tests."""
+    with Session(engine) as s:
+        for i in range(n):
+            s.add(
+                Video(
+                    id=f"{prefix}{i:04d}",
+                    title=f"{prefix} video {i:04d}",
+                    channel=channel,
+                    upload_date=f"202001{(i % 28) + 1:02d}",
+                    status=VideoStatus.present,
+                )
+            )
+        s.commit()
 
 
 def test_healthz(client):
@@ -127,3 +145,70 @@ def test_next_in_playlist():
         assert _next_in_playlist(s, "PL", "c") is None  # last entry
         assert _next_in_playlist(s, "PL", "missing") is None
         assert _next_in_playlist(s, None, "a") is None
+
+
+# --- Videos pagination --------------------------------------------------
+
+
+def _card_count(text: str) -> int:
+    return text.count('href="/watch/')
+
+
+def test_index_pagination_first_page(client):
+    _add_video_rows(_PAGE_SIZE + 5)
+    r = client.get("/")
+    assert r.status_code == 200
+    assert _card_count(r.text) == _PAGE_SIZE
+    assert "Next" in r.text
+    assert "Prev" not in r.text
+
+
+def test_index_pagination_second_page(client):
+    _add_video_rows(_PAGE_SIZE + 5)
+    r = client.get("/?page=2")
+    assert r.status_code == 200
+    assert _card_count(r.text) == 5
+    assert "Prev" in r.text
+    assert "Next" not in r.text
+
+
+def test_index_pagination_out_of_range_clamps_to_last_page(client):
+    _add_video_rows(_PAGE_SIZE + 5)
+    r = client.get("/?page=999")
+    assert r.status_code == 200
+    assert _card_count(r.text) == 5  # same as the real last page (page 2)
+    assert "Prev" in r.text
+    assert "Next" not in r.text
+
+
+def test_index_pagination_below_range_clamps_to_first_page(client):
+    _add_video_rows(_PAGE_SIZE + 5)
+    for bad_page in ("0", "-1"):
+        r = client.get(f"/?page={bad_page}")
+        assert r.status_code == 200
+        assert _card_count(r.text) == _PAGE_SIZE
+        assert "Prev" not in r.text
+        assert "Next" in r.text
+
+
+def test_index_pagination_hidden_for_small_library(client):
+    _add_video_rows(3)
+    r = client.get("/")
+    assert r.status_code == 200
+    assert _card_count(r.text) == 3
+    assert "pagination" not in r.text
+
+
+def test_index_pagination_with_search_narrows_total(client):
+    _add_video_rows(_PAGE_SIZE + 5, prefix="a", channel="Alpha Channel")
+    _add_video_rows(3, prefix="b", channel="Bravo Channel")
+    r = client.get("/?q=Bravo")
+    assert r.status_code == 200
+    assert _card_count(r.text) == 3
+    assert "pagination" not in r.text  # narrowed total fits on one page
+
+    r2 = client.get("/?q=Alpha&page=2")
+    assert r2.status_code == 200
+    assert _card_count(r2.text) == 5
+    assert "Prev" in r2.text
+    assert "Next" not in r2.text
