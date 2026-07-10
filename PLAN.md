@@ -72,9 +72,7 @@ Architecture, code structure, and build/format/lint commands live in `CLAUDE.md`
 ## Backlog (unscheduled)
 
 - **On-demand "transcode to mp4"** for the rare webm/mkv fallback and any legacy AV1 files.
-- Pagination / lazy-loading for large libraries.
 - Optional video.js player (subtitle/quality UI) in place of native `<video>`.
-- Bulk actions (multi-select delete).
 
 ## Custom playlists
 
@@ -87,6 +85,17 @@ always display sorted by the video's original YouTube upload date (no manual reo
 visually badged as "Custom" everywhere playlists are listed, and skip Sync/Retry (YouTube-only
 concepts). Deleting a custom playlist never orphan-deletes its videos — see
 `yam/library.py::delete_playlist`.
+
+## Pagination & bulk actions
+
+**Done:** the Videos section of `/` pages at 60 videos (`?page=N`, Prev/Next, count via a SQL
+`func.count()` query rather than fetching the full result set); search and sort compose
+correctly with the paginated total. Playlists stay unpaginated. Each video card also has a
+checkbox (associated to a toolbar `<form id="bulk-form">` via the HTML5 `form=` attribute,
+since the grid can't be wrapped in a form without breaking the existing per-card quick-add
+forms) to bulk **add to a custom playlist** (`POST /api/videos/bulk-add-to-playlist`) or
+**delete** (`POST /api/videos/bulk-delete`, same referenced-by-a-playlist guard as single
+delete) selected videos at once.
 
 ## Explicit non-goals (unchanged)
 
