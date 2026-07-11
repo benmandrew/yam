@@ -19,17 +19,20 @@
   <h2>Videos</h2>
   {% if videos %}
     <form id="bulk-form" method="post" class="bulk-toolbar">
-      {% if custom_playlists %}
-      <select name="playlist_id">
-        <option value="" selected disabled>Add selected to playlist…</option>
-        {% for cp in custom_playlists %}
-        <option value="{{ cp.id }}">{{ cp.title }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" formaction="/api/videos/bulk-add-to-playlist" class="btn-small">Add to playlist</button>
-      {% endif %}
-      <button type="submit" formaction="/api/videos/bulk-delete" class="btn-danger"
-              onclick="return confirm('Delete the selected videos? This can\'t be undone.')">Delete selected</button>
+      <span class="bulk-count" aria-live="polite">Select videos to act on them</span>
+      <div class="bulk-actions">
+        {% if custom_playlists %}
+        <select name="playlist_id">
+          <option value="" selected disabled>Add selected to playlist…</option>
+          {% for cp in custom_playlists %}
+          <option value="{{ cp.id }}">{{ cp.title }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" formaction="/api/videos/bulk-add-to-playlist" class="btn-small">Add to playlist</button>
+        {% endif %}
+        <button type="submit" formaction="/api/videos/bulk-delete" class="btn-danger"
+                onclick="return confirm('Delete the selected videos? This can\'t be undone.')">Delete selected</button>
+      </div>
     </form>
     <ul class="cards">
       {% for v in videos %}
@@ -109,4 +112,30 @@
     <p class="empty">No playlists yet.</p>
   {% endif %}
 </section>
+
+<script>
+  (function () {
+    var toolbar = document.getElementById("bulk-form");
+    if (!toolbar) return;
+    var count = toolbar.querySelector(".bulk-count");
+    var boxes = document.querySelectorAll(".card-select");
+
+    function sync() {
+      var n = 0;
+      boxes.forEach(function (b) {
+        var card = b.closest(".card");
+        if (card) card.classList.toggle("selected", b.checked);
+        if (b.checked) n++;
+      });
+      toolbar.classList.toggle("has-selection", n > 0);
+      if (n > 0) count.textContent = n + " selected";
+      else count.textContent = "Select videos to act on them";
+    }
+
+    boxes.forEach(function (b) {
+      b.addEventListener("change", sync);
+    });
+    sync();
+  })();
+</script>
 {% endblock %}
