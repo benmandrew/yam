@@ -424,8 +424,10 @@ def remove_video_from_playlist_route(playlist_id: str, video_id: str):
 
 @app.post("/api/videos/bulk-add-to-playlist")
 def bulk_add_to_playlist(
-    video_ids: list[str] = Form(default=[]), playlist_id: str = Form(...)
+    video_ids: list[str] = Form(default=[]), playlist_id: str = Form(default="")
 ):
+    if not playlist_id:
+        return _redirect("/", "No playlist selected.")
     if not video_ids:
         return _redirect("/", "No videos selected.")
     added = 0

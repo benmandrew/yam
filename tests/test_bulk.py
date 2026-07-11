@@ -69,6 +69,17 @@ def test_bulk_add_to_playlist_no_selection(client):
     assert "No+videos+selected" in r.headers["location"].replace("%20", "+")
 
 
+def test_bulk_add_to_playlist_no_playlist(client):
+    _add_present_video("v1")
+    r = client.post(
+        "/api/videos/bulk-add-to-playlist",
+        data={"video_ids": ["v1"]},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert "No+playlist+selected" in r.headers["location"].replace("%20", "+")
+
+
 def test_bulk_delete(client):
     _add_present_video("v1")
     _add_present_video("v2")
