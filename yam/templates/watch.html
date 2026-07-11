@@ -31,6 +31,7 @@
   {% if video.upload_date %}<span>{{ video.upload_date | ytdate }}</span>{% endif %}
   {% if video.duration_s %}<span>{{ video.duration_s | duration }}</span>{% endif %}
   {% if video.width and video.height %}<span>{{ video.width }}×{{ video.height }}</span>{% endif %}
+  {% if video.filesize %}<span>{{ video.filesize | filesizeformat }}</span>{% endif %}
   {% if video.ext %}<span class="tag">{{ video.ext }}</span>{% endif %}
 </div>
 {% if custom_playlists %}
