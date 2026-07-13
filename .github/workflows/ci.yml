@@ -1,15 +1,30 @@
+# CI + release for Yam.
+#
+# `test` runs on every PR and push (nix flake check -> ruff + format + pytest).
+# On pushes to main, v* tags, and manual dispatch, the multi-arch image build
+# runs *after* tests pass and publishes to Docker Hub. PRs run tests only.
+#
+# The image builds linux/amd64 + linux/arm64 natively (no QEMU): each arch
+# pushes an untagged, digest-only image and the manifest job stitches those
+# digests into the tagged multi-arch manifests (:latest and any v* tag).
+#
+# Required repo secrets (for the publish jobs only):
+#   DOCKERHUB_USERNAME  - your Docker Hub username (also the image namespace)
+#   DOCKERHUB_TOKEN     - a Docker Hub access token (Account Settings -> Security)
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
-  check:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v27
         with:
           extra_nix_config: |
@@ -18,3 +33,94 @@ jobs:
       # and builds the app package.
       - name: nix flake check
         run: nix flake check -L
+
+  build:
+    name: Build image (${{ matrix.name }})
+    needs: [test]
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/yam
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest for manifest job
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.name }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: Push multi-arch manifest
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name != 'pull_request'
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/yam
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect pushed image
+        run: docker buildx imagetools inspect "${IMAGE}:latest"
