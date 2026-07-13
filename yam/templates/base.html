@@ -22,5 +22,27 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  {% set flash = request.query_params.get('msg') %}
+  {% if flash %}
+  {% set level = request.query_params.get('level', 'info') %}
+  <div class="flash flash--{{ level }}" role="{{ 'alert' if level == 'error' else 'status' }}"
+       onclick="this.remove()">{{ flash }}</div>
+  <script>
+    (function () {
+      var el = document.currentScript.previousElementSibling;
+      // Drop msg/level from the URL so a refresh doesn't re-show the flash.
+      if (window.history.replaceState) {
+        var u = new URL(window.location);
+        u.searchParams.delete('msg');
+        u.searchParams.delete('level');
+        window.history.replaceState({}, '', u);
+      }
+      setTimeout(function () {
+        el.classList.add('flash--hiding');
+        setTimeout(function () { el.remove(); }, 400);
+      }, 5000);
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

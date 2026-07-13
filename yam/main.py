@@ -209,8 +209,15 @@ def enqueue_download(request: Request, url: str = Form(...)):
             session.commit()
         return _redirect_downloads("Playlist queued — enumerating videos…")
 
-    if kind == "video" and ident and _video_present(ident):
-        return _redirect_downloads("That video is already archived.")
+    if kind == "video" and ident:
+        # Guard against re-linking a video we already have or are fetching, so a
+        # duplicate paste doesn't spawn a redundant job or overwrite the file.
+        if _video_present(ident):
+            return _redirect_downloads("That video is already archived.", level="error")
+        if _video_in_flight(ident):
+            return _redirect_downloads(
+                "That video is already downloading.", level="error"
+            )
 
     with Session(engine) as session:
         session.add(Job(type=JobType.video, url=url, target_id=ident))
@@ -537,15 +544,18 @@ def clear_jobs():
 # --- helpers ----------------------------------------------------------------
 
 
-def _redirect(path: str, msg: str) -> RedirectResponse:
+def _redirect(path: str, msg: str, level: str = "info") -> RedirectResponse:
     from urllib.parse import urlencode
 
+    params = {"msg": msg}
+    if level != "info":
+        params["level"] = level
     sep = "&" if "?" in path else "?"
-    return RedirectResponse(f"{path}{sep}{urlencode({'msg': msg})}", status_code=303)
+    return RedirectResponse(f"{path}{sep}{urlencode(params)}", status_code=303)
 
 
-def _redirect_downloads(msg: str) -> RedirectResponse:
-    return _redirect("/downloads", msg)
+def _redirect_downloads(msg: str, level: str = "info") -> RedirectResponse:
+    return _redirect("/downloads", msg, level)
 
 
 def _video_present(video_id: str) -> bool:
@@ -554,6 +564,20 @@ def _video_present(video_id: str) -> bool:
     with Session(engine) as session:
         video = session.get(Video, video_id)
     return video is not None and video.status == VideoStatus.present
+
+
+def _video_in_flight(video_id: str) -> bool:
+    """True if a video job for this id is queued or running (including one
+    spawned as a playlist child), so we don't enqueue a duplicate download."""
+    with Session(engine) as session:
+        job = session.exec(
+            select(Job).where(
+                Job.type == JobType.video,
+                Job.target_id == video_id,
+                Job.status.in_([JobStatus.queued, JobStatus.running]),
+            )
+        ).first()
+    return job is not None
 
 
 def _next_in_playlist(

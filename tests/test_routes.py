@@ -104,6 +104,24 @@ def test_download_dedups_present_video(client, tmp_path):
         assert s.exec(select(Job)).all() == []  # no job enqueued
 
 
+def test_download_dedups_in_flight_video(client):
+    with Session(engine) as s:
+        s.add(Job(type=JobType.video, url="x", target_id="busy"))
+        s.commit()
+    r = client.post(
+        "/api/download",
+        data={"url": "https://www.youtube.com/watch?v=busy"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    loc = r.headers["location"]
+    assert "already+downloading" in loc.replace("%20", "+")
+    assert "level=error" in loc
+    with Session(engine) as s:
+        jobs = s.exec(select(Job).where(Job.target_id == "busy")).all()
+    assert len(jobs) == 1  # no duplicate job enqueued
+
+
 def test_download_enqueues_new_video(client):
     r = client.post(
         "/api/download",

@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Library · Yam{% endblock %}
 {% block content %}
-{% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
-
 <form class="toolbar" method="get" action="/">
   <input type="search" name="q" value="{{ q }}" placeholder="Search title or channel…">
   <select name="sort" onchange="this.form.submit()">

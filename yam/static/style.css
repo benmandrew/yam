@@ -96,6 +96,43 @@ h2 { margin: 1.5rem 0 0.75rem; }
   margin-bottom: 1rem;
 }
 
+/* Flash toast: fixed so it overlays rather than reflowing the page content. */
+.flash {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(90vw, 40rem);
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  animation: flash-in 0.2s ease-out;
+}
+
+.flash--info {
+  background: #2a1f4d;
+  border: 1px solid #3d3170;
+  color: #d9d0f2;
+}
+
+.flash--error {
+  background: #3a1d1d;
+  border: 1px solid #6e3131;
+  color: #f3caca;
+}
+
+.flash--hiding {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+@keyframes flash-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-0.5rem); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .jobs { list-style: none; padding: 0; display: grid; gap: 0.6rem; }
 
 .job {
