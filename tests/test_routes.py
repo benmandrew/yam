@@ -6,7 +6,15 @@ from sqlmodel import Session, select
 
 from yam.db import engine
 from yam.main import _PAGE_SIZE, _next_in_playlist
-from yam.models import Job, JobType, Playlist, PlaylistVideo, Video, VideoStatus
+from yam.models import (
+    Job,
+    JobStatus,
+    JobType,
+    Playlist,
+    PlaylistVideo,
+    Video,
+    VideoStatus,
+)
 
 CONTENT = bytes(range(256)) * 8  # 2048 bytes of known data
 
@@ -102,6 +110,54 @@ def test_download_dedups_present_video(client, tmp_path):
     assert "already+archived" in r.headers["location"].replace("%20", "+")
     with Session(engine) as s:
         assert s.exec(select(Job)).all() == []  # no job enqueued
+
+
+def test_download_dedups_in_flight_video(client):
+    with Session(engine) as s:
+        s.add(Job(type=JobType.video, url="x", target_id="busy"))
+        s.commit()
+    r = client.post(
+        "/api/download",
+        data={"url": "https://www.youtube.com/watch?v=busy"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    loc = r.headers["location"]
+    assert "already+downloading" in loc.replace("%20", "+")
+    assert "level=error" in loc
+    with Session(engine) as s:
+        jobs = s.exec(select(Job).where(Job.target_id == "busy")).all()
+    assert len(jobs) == 1  # no duplicate job enqueued
+
+
+def test_delete_video_flashes_success(client, tmp_path):
+    _add_present_video("gone", tmp_path)
+    r = client.post("/api/videos/gone/delete", follow_redirects=False)
+    assert r.status_code == 303
+    assert "level=success" in r.headers["location"]
+
+
+def test_delete_missing_video_flashes_error(client):
+    r = client.post("/api/videos/nope/delete", follow_redirects=False)
+    assert r.status_code == 303
+    assert "level=error" in r.headers["location"]
+
+
+def test_bulk_delete_no_selection_flashes_error(client):
+    r = client.post("/api/videos/bulk-delete", data={}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "level=error" in r.headers["location"]
+
+
+def test_jobs_partial_exposes_status_attributes(client):
+    with Session(engine) as s:
+        s.add(Video(id="v9", title="Nine", status=VideoStatus.present))
+        s.add(Job(type=JobType.video, url="u", target_id="v9", status=JobStatus.done))
+        s.commit()
+    html = client.get("/api/jobs").text
+    assert 'data-status="done"' in html
+    assert 'data-kind="video"' in html
+    assert 'data-title="Nine"' in html
 
 
 def test_download_enqueues_new_video(client):

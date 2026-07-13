@@ -209,8 +209,15 @@ def enqueue_download(request: Request, url: str = Form(...)):
             session.commit()
         return _redirect_downloads("Playlist queued — enumerating videos…")
 
-    if kind == "video" and ident and _video_present(ident):
-        return _redirect_downloads("That video is already archived.")
+    if kind == "video" and ident:
+        # Guard against re-linking a video we already have or are fetching, so a
+        # duplicate paste doesn't spawn a redundant job or overwrite the file.
+        if _video_present(ident):
+            return _redirect_downloads("That video is already archived.", level="error")
+        if _video_in_flight(ident):
+            return _redirect_downloads(
+                "That video is already downloading.", level="error"
+            )
 
     with Session(engine) as session:
         session.add(Job(type=JobType.video, url=url, target_id=ident))
@@ -379,7 +386,9 @@ def sync_playlist(playlist_id: str):
             raise HTTPException(status_code=404, detail="Playlist not found")
         if playlist.origin == PlaylistOrigin.custom:
             return _redirect(
-                f"/playlist/{playlist_id}", "Sync isn't available for custom playlists."
+                f"/playlist/{playlist_id}",
+                "Sync isn't available for custom playlists.",
+                level="error",
             )
         url = f"https://www.youtube.com/playlist?list={playlist_id}"
         session.add(Job(type=JobType.playlist, url=url, target_id=playlist_id))
@@ -397,6 +406,7 @@ def retry_playlist(playlist_id: str):
             return _redirect(
                 f"/playlist/{playlist_id}",
                 "Retry isn't available for custom playlists.",
+                level="error",
             )
     queued = enqueue_pending_for_playlist(playlist_id)
     return _redirect(f"/playlist/{playlist_id}", f"Queued {queued} pending video(s).")
@@ -405,21 +415,23 @@ def retry_playlist(playlist_id: str):
 @app.post("/api/playlists")
 def create_playlist_route(title: str = Form(...)):
     playlist = create_custom_playlist(title)
-    return _redirect(f"/playlist/{playlist.id}", f"Created “{playlist.title}”.")
+    return _redirect(
+        f"/playlist/{playlist.id}", f"Created “{playlist.title}”.", level="success"
+    )
 
 
 @app.post("/api/videos/{video_id}/add-to-playlist")
 def add_video_to_playlist_route(
     video_id: str, playlist_id: str = Form(...), next_path: str = Form("/")
 ):
-    _ok, msg = add_video_to_playlist(playlist_id, video_id)
-    return _redirect(next_path, msg)
+    ok, msg = add_video_to_playlist(playlist_id, video_id)
+    return _redirect(next_path, msg, level=_level(ok))
 
 
 @app.post("/api/playlists/{playlist_id}/videos/{video_id}/remove")
 def remove_video_from_playlist_route(playlist_id: str, video_id: str):
-    _ok, msg = remove_video_from_playlist(playlist_id, video_id)
-    return _redirect(f"/playlist/{playlist_id}", msg)
+    ok, msg = remove_video_from_playlist(playlist_id, video_id)
+    return _redirect(f"/playlist/{playlist_id}", msg, level=_level(ok))
 
 
 @app.post("/api/videos/bulk-add-to-playlist")
@@ -427,9 +439,9 @@ def bulk_add_to_playlist(
     video_ids: list[str] = Form(default=[]), playlist_id: str = Form(default="")
 ):
     if not playlist_id:
-        return _redirect("/", "No playlist selected.")
+        return _redirect("/", "No playlist selected.", level="error")
     if not video_ids:
-        return _redirect("/", "No videos selected.")
+        return _redirect("/", "No videos selected.", level="error")
     added = 0
     for vid in video_ids:
         ok, _msg = add_video_to_playlist(playlist_id, vid)
@@ -439,13 +451,13 @@ def bulk_add_to_playlist(
     msg = f"Added {added} video(s) to the playlist."
     if skipped:
         msg += f" {skipped} skipped (already in it or unavailable)."
-    return _redirect("/", msg)
+    return _redirect("/", msg, level=_level(added > 0))
 
 
 @app.post("/api/videos/bulk-delete")
 def bulk_delete(video_ids: list[str] = Form(default=[])):
     if not video_ids:
-        return _redirect("/", "No videos selected.")
+        return _redirect("/", "No videos selected.", level="error")
     deleted = 0
     for vid in video_ids:
         ok, _msg = delete_video(vid)
@@ -455,7 +467,7 @@ def bulk_delete(video_ids: list[str] = Form(default=[])):
     msg = f"Deleted {deleted} video(s)."
     if skipped:
         msg += f" {skipped} skipped (still referenced by a playlist)."
-    return _redirect("/", msg)
+    return _redirect("/", msg, level=_level(deleted > 0))
 
 
 @app.get("/media/{video_id}")
@@ -497,14 +509,14 @@ def subtitles(video_id: str):
 
 @app.post("/api/videos/{video_id}/delete")
 def delete_video_route(video_id: str):
-    _ok, msg = delete_video(video_id)
-    return _redirect("/", msg)
+    ok, msg = delete_video(video_id)
+    return _redirect("/", msg, level=_level(ok))
 
 
 @app.post("/api/playlists/{playlist_id}/delete")
 def delete_playlist_route(playlist_id: str):
-    _ok, msg = delete_playlist(playlist_id)
-    return _redirect("/", msg)
+    ok, msg = delete_playlist(playlist_id)
+    return _redirect("/", msg, level=_level(ok))
 
 
 @app.post("/api/jobs/{job_id}/retry")
@@ -531,21 +543,29 @@ def clear_jobs():
         for job in finished:
             session.delete(job)
         session.commit()
-    return _redirect_downloads("Cleared finished downloads.")
+    return _redirect_downloads("Cleared finished downloads.", level="success")
 
 
 # --- helpers ----------------------------------------------------------------
 
 
-def _redirect(path: str, msg: str) -> RedirectResponse:
+def _redirect(path: str, msg: str, level: str = "info") -> RedirectResponse:
     from urllib.parse import urlencode
 
+    params = {"msg": msg}
+    if level != "info":
+        params["level"] = level
     sep = "&" if "?" in path else "?"
-    return RedirectResponse(f"{path}{sep}{urlencode({'msg': msg})}", status_code=303)
+    return RedirectResponse(f"{path}{sep}{urlencode(params)}", status_code=303)
 
 
-def _redirect_downloads(msg: str) -> RedirectResponse:
-    return _redirect("/downloads", msg)
+def _redirect_downloads(msg: str, level: str = "info") -> RedirectResponse:
+    return _redirect("/downloads", msg, level)
+
+
+def _level(ok: bool) -> str:
+    """Flash level for an action that either succeeded or was rejected."""
+    return "success" if ok else "error"
 
 
 def _video_present(video_id: str) -> bool:
@@ -554,6 +574,20 @@ def _video_present(video_id: str) -> bool:
     with Session(engine) as session:
         video = session.get(Video, video_id)
     return video is not None and video.status == VideoStatus.present
+
+
+def _video_in_flight(video_id: str) -> bool:
+    """True if a video job for this id is queued or running (including one
+    spawned as a playlist child), so we don't enqueue a duplicate download."""
+    with Session(engine) as session:
+        job = session.exec(
+            select(Job).where(
+                Job.type == JobType.video,
+                Job.target_id == video_id,
+                Job.status.in_([JobStatus.queued, JobStatus.running]),
+            )
+        ).first()
+    return job is not None
 
 
 def _next_in_playlist(

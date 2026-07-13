@@ -9,6 +9,33 @@
        that a browser loading the page over https blocks as mixed content. -->
   <link rel="icon" href="/static/favicon.png" type="image/png">
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Reusable flash toast: window.flash(msg, level) where level is
+    // 'success' | 'info' | 'error'. Toasts stack in a fixed container so they
+    // overlay without reflowing the page; auto-dismiss; click to close.
+    // Defined in <head> so page scripts (e.g. /downloads) can call it.
+    // textContent, not HTML, keeps caller-supplied text inert.
+    window.flash = function (msg, level) {
+      level = level || "info";
+      var stack = document.getElementById("flash-stack");
+      if (!stack) {
+        stack = document.createElement("div");
+        stack.id = "flash-stack";
+        document.body.appendChild(stack);
+      }
+      var el = document.createElement("div");
+      el.className = "flash flash--" + level;
+      el.setAttribute("role", level === "error" ? "alert" : "status");
+      el.textContent = msg;
+      el.addEventListener("click", function () { el.remove(); });
+      stack.appendChild(el);
+      setTimeout(function () {
+        el.classList.add("flash--hiding");
+        setTimeout(function () { el.remove(); }, 400);
+      }, 5000);
+      return el;
+    };
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -22,5 +49,21 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+    // Bootstrap a flash from ?msg=&level= after a redirect, then strip those
+    // params so a refresh doesn't re-show it.
+    (function () {
+      var p = new URLSearchParams(window.location.search);
+      var msg = p.get("msg");
+      if (!msg) return;
+      window.flash(msg, p.get("level") || "info");
+      if (window.history.replaceState) {
+        p.delete("msg");
+        p.delete("level");
+        var q = p.toString();
+        window.history.replaceState({}, "", window.location.pathname + (q ? "?" + q : ""));
+      }
+    })();
+  </script>
 </body>
 </html>

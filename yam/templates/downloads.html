@@ -7,13 +7,40 @@
     <button type="submit" class="btn-small">Clear finished</button>
   </form>
 </div>
-{% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
 <div id="jobs">Loading…</div>
 <script>
+  // Toast when a job finishes or fails between polls. The first poll only
+  // records current statuses (primed=false) so we don't announce jobs that
+  // were already done when the page loaded.
+  var jobStatus = {};
+  var primed = false;
+
+  function announce(container) {
+    container.querySelectorAll('.job[data-job-id]').forEach(function (el) {
+      var id = el.getAttribute('data-job-id');
+      var status = el.getAttribute('data-status');
+      var prev = jobStatus[id];
+      jobStatus[id] = status;
+      if (!primed || status === prev) return;
+      var kind = el.getAttribute('data-kind');
+      var title = el.getAttribute('data-title') || 'Download';
+      if (status === 'done' && kind === 'video') {
+        window.flash('“' + title + '” finished downloading.', 'success');
+      } else if (status === 'error') {
+        var verb = kind === 'playlist' ? 'failed to load' : 'failed to download';
+        window.flash('“' + title + '” ' + verb + '.', 'error');
+      }
+    });
+  }
+
   async function refresh() {
     try {
       const r = await fetch('/api/jobs');
-      if (r.ok) document.getElementById('jobs').innerHTML = await r.text();
+      if (!r.ok) return;
+      const jobs = document.getElementById('jobs');
+      jobs.innerHTML = await r.text();
+      announce(jobs);
+      primed = true;
     } catch (e) { /* keep last render on transient errors */ }
   }
   refresh();
