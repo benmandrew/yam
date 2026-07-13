@@ -45,15 +45,21 @@
 {% endif %}
 {% endmacro %}
 
+{% macro job_attrs(job) %}
+{%- set d = details.get(job.id) -%}
+data-job-id="{{ job.id }}" data-status="{{ job.status.value }}"
+data-kind="{{ job.type.value }}" data-title="{{ d.title if d else job.url }}"
+{%- endmacro %}
+
 {% if groups %}
 <ul class="jobs">
   {% for g in groups %}
-  <li class="job job--{{ g.job.status.value }}">
+  <li class="job job--{{ g.job.status.value }}" {{ job_attrs(g.job) }}>
     {{ job_row(g.job) }}
     {% if g.children %}
     <ul class="jobs job-children">
       {% for c in g.children %}
-      <li class="job job--{{ c.status.value }}">{{ job_row(c) }}</li>
+      <li class="job job--{{ c.status.value }}" {{ job_attrs(c) }}>{{ job_row(c) }}</li>
       {% endfor %}
     </ul>
     {% endif %}
