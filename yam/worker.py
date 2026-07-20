@@ -22,6 +22,7 @@ from .config import settings
 from .db import engine
 from .disk import has_min_free_space
 from .downloader import download_video, enumerate_playlist, friendly_error
+from .thumbnails import resize_thumbnail
 from .models import (
     Job,
     JobStatus,
@@ -80,6 +81,21 @@ def _reset_orphaned_jobs() -> None:
         if rows:
             log.info("reset %d orphaned running job(s) to queued", len(rows))
         session.commit()
+
+
+def backfill_thumbnails() -> None:
+    """Downscale any oversized thumbnails from before resize-on-download existed.
+
+    Idempotent (resize_thumbnail skips already-small images), so it's safe to run
+    on every startup. Runs in a worker thread off the event loop.
+    """
+    with Session(engine) as session:
+        paths = session.exec(
+            select(Video.thumbnail_path).where(Video.thumbnail_path.is_not(None))
+        ).all()
+    resized = sum(1 for p in paths if p and resize_thumbnail(p))
+    if resized:
+        log.info("backfill: resized %d oversized thumbnail(s)", resized)
 
 
 def _claim_jobs(limit: int) -> list[int]:
@@ -192,6 +208,8 @@ def _save_video(info: dict[str, Any]) -> None:
         file_path = str(video_dir / f"{vid}.{ext}")
 
     thumbnail = next((str(p) for p in video_dir.glob(f"{vid}.jpg")), None)
+    if thumbnail:
+        resize_thumbnail(thumbnail)
 
     # yt-dlp writes subs as "<id>.<lang>.vtt"; prefer the English track.
     subtitle = next(

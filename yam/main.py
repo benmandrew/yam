@@ -44,7 +44,7 @@ from .models import (
     VideoStatus,
 )
 from .urls import classify
-from .worker import enqueue_pending_for_playlist, run_worker
+from .worker import backfill_thumbnails, enqueue_pending_for_playlist, run_worker
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -87,11 +87,15 @@ async def lifespan(_app: FastAPI):
     init_db()
     stop = asyncio.Event()
     worker_task = asyncio.create_task(run_worker(stop))
+    # One-off downscale of thumbnails from before resize-on-download; off the
+    # event loop so a large library doesn't delay startup. Idempotent.
+    backfill_task = asyncio.create_task(asyncio.to_thread(backfill_thumbnails))
     try:
         yield
     finally:
         stop.set()
         await worker_task
+        backfill_task.cancel()
 
 
 app = FastAPI(title="Yam", version="0.1.0", lifespan=lifespan)

@@ -74,6 +74,15 @@ Architecture, code structure, and build/format/lint commands live in `CLAUDE.md`
 - **On-demand "transcode to mp4"** for the rare webm/mkv fallback and any legacy AV1 files.
 - Optional video.js player (subtitle/quality UI) in place of native `<video>`.
 
+## Thumbnail sizing
+
+**Done:** yt-dlp fetches YouTube's full-res thumbnail (up to 1280×720), but the grid renders
+each at ~240px, so cards loaded slowly. `yam/thumbnails.py::resize_thumbnail` downscales JPEGs
+to ≤480px wide (2× the card, for retina) via ffmpeg — idempotent (skips already-small images,
+never upscales, atomic temp-file `os.replace`). The worker resizes on download (`_save_video`),
+and `worker.py::backfill_thumbnails` (run once off the event loop at startup) downscales any
+pre-existing oversized thumbnails.
+
 ## Custom playlists
 
 **Done:** user-created playlists (`Playlist.origin`, nullable/default-less for safe
