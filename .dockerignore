@@ -1,0 +1,42 @@
+# The image needs exactly two things from this context: requirements.txt (for the
+# builder stage) and yam/ (for the runtime stage). Everything below is either dev
+# state, build output, or secrets -- none of it belongs in a layer.
+#
+# The immediate motivation was __pycache__: without this file, yam/__pycache__
+# was copied into the image, carrying .pyc built by whatever Python is installed
+# locally rather than the 3.13 the image runs.
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Nix
+result
+result-*
+.direnv/
+flake.nix
+flake.lock
+
+# Local dev state (the devShell defaults MEDIA_DIR/DATA_DIR here)
+.local/
+
+# Secrets and runtime data -- these must never reach an image layer
+.env
+cookies.txt
+*.db
+*.db-wal
+*.db-shm
+
+# Not needed to build or run
+.git/
+.github/
+tests/
+pytest.ini
+docker-compose.yml
+Dockerfile
+*.md
