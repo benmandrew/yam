@@ -189,6 +189,15 @@ h2 { margin: 1.5rem 0 0.75rem; }
 
 .bar { height: 6px; background: #2c2352; border-radius: 999px; margin: 0.55rem 0 0.35rem; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--accent); transition: width 0.4s ease; }
+/* No percentage to show: sweep a highlight across a full-width bar instead. */
+.bar--sweeping .bar-fill {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: bar-sweep 1.4s ease-in-out infinite;
+}
+@keyframes bar-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
 
 .job-meta { font-size: 0.82rem; color: var(--muted); }
 .job-meta a { color: var(--accent); text-decoration: none; }

@@ -25,9 +25,14 @@
   <span class="badge badge--{{ job.status.value }}">{{ job.status.value }}</span>
 </div>
 {% if job.status.value in ('running', 'queued') %}
-<div class="bar"><div class="bar-fill" style="width: {{ job.progress }}%"></div></div>
+{% set phase = job.phase.value if job.phase else '' %}
+{# The tail end has no measurable size to track, so the bar just sweeps. #}
+{% set sweeping = phase == 'finishing' %}
+<div class="bar{% if sweeping %} bar--sweeping{% endif %}"><div class="bar-fill" style="width: {{ 100 if sweeping else job.progress }}%"></div></div>
 <div class="job-meta">
-  {{ job.progress }}%{% if job.speed %} · {{ job.speed }}{% endif %}{% if job.eta %} · ETA {{ job.eta }}{% endif %}
+  {%- if phase %}{{ job.phase | phase_label }}{% endif %}
+  {%- if not sweeping %}{% if phase %} · {% endif %}{{ job.progress }}%{% endif %}
+  {%- if job.speed %} · {{ job.speed }}{% endif %}{% if job.eta %} · ETA {{ job.eta }}{% endif %}
 </div>
 {% elif job.status.value == 'error' %}
 <div class="job-error">{{ job.error_msg }}</div>

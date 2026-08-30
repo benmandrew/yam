@@ -70,6 +70,19 @@ def _fmt_ytdate(value: str | None) -> str:
     return value or ""
 
 
+_PHASE_LABELS = {
+    "downloading_video": "Downloading video",
+    "downloading_audio": "Downloading audio",
+    "merging": "Merging audio and video",
+    "finishing": "Finishing up",
+}
+
+
+def _fmt_phase(value: object) -> str:
+    # Accepts a JobPhase or its bare string value; unknown phases render blank.
+    return _PHASE_LABELS.get(getattr(value, "value", value) or "", "")
+
+
 def _fmt_duration(seconds: int | None) -> str:
     if not seconds:
         return ""
@@ -80,6 +93,7 @@ def _fmt_duration(seconds: int | None) -> str:
 
 templates.env.filters["ytdate"] = _fmt_ytdate
 templates.env.filters["duration"] = _fmt_duration
+templates.env.filters["phase_label"] = _fmt_phase
 
 
 @asynccontextmanager
@@ -553,6 +567,7 @@ def retry_job(job_id: int):
         if job and job.status == JobStatus.error:
             job.status = JobStatus.queued
             job.progress = 0.0
+            job.phase = None
             job.error_msg = None
             session.add(job)
             session.commit()

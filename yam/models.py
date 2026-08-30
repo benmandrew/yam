@@ -37,6 +37,16 @@ class JobStatus(str, Enum):
     skipped = "skipped"
 
 
+class JobPhase(str, Enum):
+    """Stage of a video job that the progress bar is currently tracking. Each
+    phase restarts the bar at 0%."""
+
+    downloading_video = "downloading_video"
+    downloading_audio = "downloading_audio"
+    merging = "merging"
+    finishing = "finishing"
+
+
 class PlaylistOrigin(str, Enum):
     youtube = "youtube"
     custom = "custom"
@@ -92,7 +102,8 @@ class Job(SQLModel, table=True):
     url: str
     target_id: Optional[str] = None  # video/playlist id, once resolved
     status: JobStatus = JobStatus.queued
-    progress: float = 0.0  # 0..100
+    progress: float = 0.0  # 0..100, within the current phase
+    phase: Optional[JobPhase] = None  # None until the job starts downloading
     speed: Optional[str] = None
     eta: Optional[str] = None
     error_msg: Optional[str] = None

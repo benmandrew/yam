@@ -25,6 +25,7 @@ from .downloader import download_video, enumerate_playlist, friendly_error
 from .thumbnails import resize_thumbnail
 from .models import (
     Job,
+    JobPhase,
     JobStatus,
     JobType,
     Playlist,
@@ -113,6 +114,7 @@ def _claim_jobs(limit: int) -> list[int]:
         for job in jobs:
             job.status = JobStatus.running
             job.progress = 0.0
+            job.phase = None
             job.updated_at = _utcnow()
             session.add(job)
             claimed.append(job.id)
@@ -147,17 +149,23 @@ def _low_space_msg(free_bytes: int) -> str:
 
 
 def _download_video_job(job_id: int, url: str) -> None:
-    last_write = {"t": 0.0}
+    last_write: dict[str, Any] = {"t": 0.0, "phase": None}
 
-    def on_progress(pct: float, speed: str | None, eta: str | None) -> None:
+    def on_progress(
+        phase: JobPhase, pct: float, speed: str | None, eta: str | None
+    ) -> None:
         now = time.monotonic()
-        if pct < 100 and now - last_write["t"] < _PROGRESS_MIN_INTERVAL:
+        # A phase change always writes through, so the new stage shows at once.
+        same_phase = phase == last_write["phase"]
+        if same_phase and pct < 100 and now - last_write["t"] < _PROGRESS_MIN_INTERVAL:
             return
         last_write["t"] = now
+        last_write["phase"] = phase
         with Session(engine) as session:
             job = session.get(Job, job_id)
             if job is None:
                 return
+            job.phase = phase
             job.progress = round(pct, 1)
             job.speed = speed
             job.eta = eta
@@ -167,6 +175,9 @@ def _download_video_job(job_id: int, url: str) -> None:
 
     try:
         info = download_video(url, on_progress)
+        # Covers the rest of yt-dlp's postprocessing and _save_video's own work
+        # (thumbnail resize, DB write) for downloads that never merge.
+        on_progress(JobPhase.finishing, 0.0, None, None)
         _save_video(info)
         _finish_job(job_id, JobStatus.done, target_id=info.get("id"))
     except Exception as exc:  # noqa: BLE001 - recorded on the job row
@@ -186,6 +197,7 @@ def _finish_job(
         if job is None:
             return
         job.status = status
+        job.phase = None
         if status == JobStatus.done:
             job.progress = 100.0
         if target_id:

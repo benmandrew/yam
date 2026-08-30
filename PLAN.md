@@ -83,6 +83,23 @@ never upscales, atomic temp-file `os.replace`). The worker resizes on download (
 and `worker.py::backfill_thumbnails` (run once off the event loop at startup) downscales any
 pre-existing oversized thumbnails.
 
+## Download phases
+
+**Done:** the progress bar used to track only the byte download, so a job sat at 100% for as long
+as ffmpeg took to mux. `Job.phase` (a `JobPhase` enum, nullable so `db.py::_add_missing_columns`
+migrates existing databases) names the current stage and the bar restarts at 0% for each one:
+`downloading_video`, `downloading_audio` (a merged download fetches the two streams in sequence,
+each with its own 0..100 run), `merging`, then `finishing`.
+
+The merge percentage is an estimate. yt-dlp's `postprocessor_hooks` report the merger starting and
+finishing but carry no percentage, and `FFmpegPostProcessor` does not parse ffmpeg's progress
+output at all. Since the merge is a stream copy, the output ends up about the size of the two input
+streams, so `downloader.py::MergeProgress` samples the download directory's total size every 0.5s
+and measures its growth past the pre-merge baseline, capped at 99%. That needs no knowledge of
+yt-dlp's temporary file names. The sampler runs on a daemon thread that `download_video` always
+joins before returning. `finishing` covers the remaining postprocessors and `_save_video`; it has
+no measurable size, so its bar sweeps instead of filling.
+
 ## Custom playlists
 
 **Done:** user-created playlists (`Playlist.origin`, nullable/default-less for safe
