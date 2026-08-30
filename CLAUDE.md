@@ -35,6 +35,15 @@ ruff + format-check + pytest in a sandbox, GitHub Actions (`.github/workflows/ci
 runs it on PRs, and `yam/logging_config.py` provides `LOG_LEVEL`-driven structured
 logging. All milestones complete; see PLAN.md for the remaining backlog.
 
+yt-dlp currency (post-M8): CI rebuilds the image daily, but only when PyPI's current stable
+yt-dlp is newer than the `io.yam.ytdlp.version` label on the published `:latest`; the
+Dockerfile pins that version through a constraints file and stamps the label from the same
+value. At runtime, `POST /api/ytdlp/update` ("Check for update" on `/config`) pip-installs the
+current stable into `$DATA_DIR/ytdlp`, and `ensure_overlay_on_path()` — called from
+`yam/__init__.py`, the only point guaranteed to run before `yam.downloader` imports `yt_dlp` —
+prepends it to `sys.path` only when strictly newer than the baked-in copy, so a rebuilt image
+supersedes it. Takes effect on restart. Stable releases only, never nightlies. See PLAN.md.
+
 Note: models have no ORM `Relationship()`, so never insert a PlaylistVideo in the same
 flush as the Playlist/Video it references — commit the parents first (the worker does).
 
@@ -54,6 +63,7 @@ yam/
   models.py            SQLModel tables: Video, Playlist, PlaylistVideo, Job
   main.py              FastAPI app: lifespan init, routes, static/template mounts
   logging_config.py    configure_logging() — LOG_LEVEL-driven, called from lifespan
+  ytdlp_update.py      yt-dlp overlay under DATA_DIR (see PLAN.md)
   templates/           Jinja2 (base.html + index.html); htmx planned for M2+
   static/style.css     Dark library UI
 tests/                 Offline pytest suite (conftest sets temp DATA_DIR/MEDIA_DIR)

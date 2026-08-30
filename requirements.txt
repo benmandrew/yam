@@ -5,6 +5,10 @@ uvicorn==0.40.0
 sqlmodel==0.0.38
 jinja2==3.1.5
 python-multipart==0.0.29
-# yt-dlp is intentionally unpinned: it needs to track YouTube changes, so image
-# rebuilds should pull the latest.
+# yt-dlp is intentionally unpinned: it has to track YouTube's changes, so every
+# image rebuild should pull the current release. CI resolves that release and
+# pins it through the YTDLP_VERSION build arg (see Dockerfile), which keeps a
+# build reproducible and lets the image carry a label saying what it shipped; a
+# bare `docker build` just floats. A running container can install a newer one
+# into DATA_DIR without a rebuild -- see yam/ytdlp_update.py.
 yt-dlp

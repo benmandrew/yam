@@ -10,11 +10,29 @@
 # so nothing has to be re-resolved or re-pathed on the other side.
 FROM python:3.13-slim AS builder
 
+# The yt-dlp release to bake in. CI resolves the current stable version and
+# passes it here so both architectures of one build pin the same version and the
+# image can be labelled with it -- that label is what the scheduled workflow
+# compares against PyPI to decide whether a rebuild is worth running. A bare
+# `docker build` leaves it empty and gets whatever requirements.txt floats to.
+ARG YTDLP_VERSION=""
+
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN if [ -n "$YTDLP_VERSION" ]; then \
+        echo "yt-dlp==${YTDLP_VERSION}" > /tmp/constraints.txt; \
+    else \
+        : > /tmp/constraints.txt; \
+    fi \
+    && pip install --no-cache-dir --prefix=/install -c /tmp/constraints.txt -r requirements.txt
 
 FROM python:3.13-slim
+
+# Records what the builder actually installed, so the scheduled workflow can read
+# it off the published manifest without pulling the image. "unknown" on an
+# unpinned local build, which the workflow treats as stale and rebuilds.
+ARG YTDLP_VERSION=""
+LABEL io.yam.ytdlp.version="${YTDLP_VERSION:-unknown}"
 
 # ffmpeg is needed at runtime to mux the downloaded video + audio streams.
 RUN apt-get update \

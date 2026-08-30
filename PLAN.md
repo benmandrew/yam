@@ -106,6 +106,56 @@ forms) to bulk **add to a custom playlist** (`POST /api/videos/bulk-add-to-playl
 **delete** (`POST /api/videos/bulk-delete`, same referenced-by-a-playlist guard as single
 delete) selected videos at once.
 
+## Keeping yt-dlp current
+
+**Done:** the Docker image baked in whatever yt-dlp release pip resolved at build time, and
+YouTube breaks yt-dlp's *extractor clients* on its own schedule. On 2026-08-17 YouTube began
+returning 403 for the `android_vr` client, yt-dlp dropped that client from its defaults on
+2026-08-19, and an image built on 2026-08-08 carried on asking for `android_vr` indefinitely.
+Picking up a yt-dlp release used to require a commit to yam. Two mechanisms now do it without
+one.
+
+**Version-gated daily rebuild.** `.github/workflows/ci.yml` gained a `schedule` trigger at
+cron `0 4 * * *` and a `ytdlp` job (skipped on `pull_request`). That job curls
+`https://pypi.org/pypi/yt-dlp/json` for the current stable release and reads the
+`io.yam.ytdlp.version` label off the published `:latest` with `docker buildx imagetools
+inspect`, which is a registry read and pulls no layers. It outputs `version` and `stale`. The
+`build` job now declares `needs: [test, ytdlp]` and runs only when the trigger is not
+`pull_request` and either the trigger is not `schedule` or `needs.ytdlp.outputs.stale ==
+'true'`, so a scheduled run that finds nothing new costs one curl and one registry read. Every
+other trigger builds regardless, because the source tree changed.
+
+**Pinning and the label.** The resolved version reaches the `Dockerfile` as the
+`YTDLP_VERSION` build arg, which writes it into a pip *constraints file* so both architectures
+of one multi-arch build pin the same release, and stamps it as the `io.yam.ytdlp.version`
+image label. A bare local `docker build` leaves the arg empty, floats to whatever pip
+resolves, and labels the image `unknown`, which the workflow reads as stale and rebuilds.
+Writing the label from the same value that was pinned is what keeps the two honest. This
+closes the *build* gap to about a day; the host running `:latest` still needs a `docker
+compose pull` to receive the result.
+
+**Runtime overlay.** `$DATA_DIR/ytdlp` is an overlay directory populated by
+`POST /api/ytdlp/update`, which runs `pip install --target $DATA_DIR/ytdlp
+yt-dlp==<current stable>` behind a "Check for update" button on `/config`.
+`yam/ytdlp_update.py::ensure_overlay_on_path` is called from `yam/__init__.py`, since package
+import is the only point guaranteed to run before `yam.downloader` imports `yt_dlp` at module
+scope, and it prepends the overlay to `sys.path` only when the overlay's version is strictly
+newer than the baked-in one. A rebuilt image shipping something newer therefore takes over on
+its own and the overlay stops shadowing it, with no volume to clear by hand. A broken overlay
+is logged and ignored rather than stopping the app booting.
+
+**Reading and applying.** The overlay version comes from the `.dist-info` directory name, so
+nothing has to be imported to find out what is there. A newly installed release takes effect
+on the next restart, because `yt_dlp` is already imported by then, and the flash message says
+so. Only stable PyPI releases are fetched — PyPI does carry yt-dlp nightlies as `.devN`
+pre-releases, and yam never asks for them. `/config` shows the running yt-dlp version and
+whether it came from the image or the overlay, and the app lifespan logs `yt-dlp <version>
+active` once logging is configured.
+
+The two halves overlap on purpose. The daily rebuild keeps a fresh install current with no
+intervention, and the overlay covers the interval between a yt-dlp release and whenever the
+host next pulls.
+
 ## Explicit non-goals (unchanged)
 
 - Channel-wide auto-subscription/sync.

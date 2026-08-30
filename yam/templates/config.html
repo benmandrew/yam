@@ -23,4 +23,34 @@
   <tr><th>Archived videos</th><td>{{ archived | filesizeformat }}</td></tr>
   <tr><th>Disk free</th><td>{{ disk_free | filesizeformat }} of {{ disk_total | filesizeformat }}</td></tr>
 </table>
+
+<h2>Downloader</h2>
+<p class="empty">
+  YouTube breaks yt-dlp's extractor clients on its own schedule, so a version
+  that worked last week can start returning 403s. Updating installs the newest
+  stable release into {{ settings.data_dir }}/ytdlp, which takes effect the next
+  time Yam restarts. A newer image supersedes it automatically.
+</p>
+
+<table class="config-table">
+  <tr><th>yt-dlp version</th><td>{{ ytdlp_version }}</td></tr>
+  <tr>
+    <th>Source</th>
+    <td>{% if ytdlp_overlay %}data-directory overlay{% else %}bundled with the image{% endif %}</td>
+  </tr>
+</table>
+
+<form class="ytdlp-update" method="post" action="/api/ytdlp/update">
+  <button class="btn" type="submit">Check for update</button>
+</form>
+
+<script>
+  // The POST shells out to pip, so it can sit for a while. Park the button so a
+  // second click can't start a concurrent install.
+  document.querySelector(".ytdlp-update").addEventListener("submit", function (e) {
+    var b = e.target.querySelector("button");
+    b.disabled = true;
+    b.textContent = "Checking\u2026";
+  });
+</script>
 {% endblock %}

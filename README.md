@@ -116,6 +116,26 @@ mount it into the container, and point `COOKIES_FILE` at it:
 When a download or playlist enumeration hits the bot check, the failed job on
 `/downloads` shows this guidance instead of the raw yt-dlp error.
 
+### Keeping yt-dlp up to date
+
+YouTube changes the interfaces yt-dlp speaks to on its own schedule, and a yt-dlp
+that has fallen behind starts failing downloads with HTTP 403 on videos that
+worked the week before. Two things keep Yam's copy current, and neither needs a
+change to Yam itself.
+
+CI rebuilds and republishes the image every day that PyPI has a newer stable
+yt-dlp than the published `latest` (the pinned release is recorded in the image's
+`io.yam.ytdlp.version` label), so `docker compose pull && docker compose up -d`
+gets you a current image.
+
+To fix it the same day instead of waiting for the next pull, open `/config` and
+press "Check for update". Yam installs the current stable yt-dlp into the data
+volume (`$DATA_DIR/ytdlp`), where it survives container restarts. Restart the
+container to apply it — the old version is already loaded by the time you press
+the button. `/config` shows the running version and where it came from, the image
+or that install. Once a pulled image ships a yt-dlp at least as new, the
+installed copy is ignored automatically and there is nothing to clean up.
+
 ### Access control (optional Basic auth)
 
 Yam speaks plain HTTP and expects TLS/access control in front of it (see

@@ -4,6 +4,14 @@
 # On pushes to main, v* tags, and manual dispatch, the multi-arch image build
 # runs *after* tests pass and publishes to Docker Hub. PRs run tests only.
 #
+# A daily `schedule` covers the case the source tree can't: YouTube breaks
+# yt-dlp's extractor clients on its own schedule, so an image that worked last
+# week starts 403ing without a line of yam changing. The `ytdlp` job compares
+# PyPI's current stable against the version labelled on the published :latest,
+# and the build only runs when they differ -- so a quiet week costs one curl.
+# The version it resolves is then pinned into the build, which keeps the label
+# honest and stops the two architectures picking up different releases.
+#
 # The image builds linux/amd64 + linux/arm64 natively (no QEMU): each arch
 # pushes an untagged, digest-only image and the manifest job stitches those
 # digests into the tagged multi-arch manifests (:latest and any v* tag).
@@ -18,6 +26,8 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  schedule:
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 jobs:
@@ -34,10 +44,58 @@ jobs:
       - name: nix flake check
         run: nix flake check -L
 
+  ytdlp:
+    name: Resolve yt-dlp version
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      stale: ${{ steps.check.outputs.stale }}
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/yam
+    steps:
+      # Logged in for the registry read below: an anonymous manifest fetch shares
+      # a per-IP pull limit with every other runner on the same egress.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # `imagetools inspect` reads the config off the registry without pulling
+      # layers. .Image on a manifest list is keyed by platform, so walk the JSON
+      # for the label rather than guessing a path. A first run, or any image
+      # predating the label, comes back empty and so counts as stale.
+      # Neither lookup is allowed to fail the job. An unreachable PyPI leaves the
+      # version empty, so a push still publishes -- just unpinned, labelled
+      # "unknown", which the next scheduled run sees as stale and corrects. A
+      # scheduled run in that state stops instead, since it learned nothing.
+      - name: Compare PyPI against the published image
+        id: check
+        run: |
+          set -uo pipefail
+          latest=$(curl -fsSL --max-time 30 https://pypi.org/pypi/yt-dlp/json \
+            | jq -r '.info.version // empty') || latest=""
+          shipped=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{json .Image}}' \
+            | jq -r 'first(.. | objects | .["io.yam.ytdlp.version"]? // empty) // empty') || shipped=""
+          echo "PyPI stable: ${latest:-<unreachable>}"
+          echo "Published:   ${shipped:-<unlabelled or unreachable>}"
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+          if [ -z "$latest" ] || [ "$latest" = "$shipped" ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing to rebuild for; a scheduled run stops here."
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build image (${{ matrix.name }})
-    needs: [test]
-    if: github.event_name != 'pull_request'
+    needs: [test, ytdlp]
+    # Scheduled runs build only when yt-dlp has actually moved; every other
+    # trigger means the source tree changed, so build regardless.
+    if: >-
+      github.event_name != 'pull_request'
+      && (github.event_name != 'schedule' || needs.ytdlp.outputs.stale == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -80,6 +138,8 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          build-args: |
+            YTDLP_VERSION=${{ needs.ytdlp.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
 

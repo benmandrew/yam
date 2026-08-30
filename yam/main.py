@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -22,7 +23,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
-from . import disk
+from . import disk, ytdlp_update
 from .config import settings
 from .db import engine, init_db
 from .library import (
@@ -84,6 +85,7 @@ templates.env.filters["duration"] = _fmt_duration
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     configure_logging()
+    logging.getLogger(__name__).info("yt-dlp %s active", ytdlp_update.running_version())
     init_db()
     stop = asyncio.Event()
     worker_task = asyncio.create_task(run_worker(stop))
@@ -245,7 +247,28 @@ def config_view(request: Request):
             "archived": disk.archived_bytes(),
             "disk_total": total,
             "disk_free": free,
+            "ytdlp_version": ytdlp_update.running_version(),
+            "ytdlp_overlay": ytdlp_update.overlay_version(),
         },
+    )
+
+
+@app.post("/api/ytdlp/update")
+def update_ytdlp():
+    """Install the newest stable yt-dlp into the DATA_DIR overlay.
+
+    Sync def, so FastAPI runs the pip subprocess in a worker thread rather than
+    on the event loop. The new version is only picked up on restart."""
+    try:
+        running, latest = ytdlp_update.update()
+    except ytdlp_update.UpdateError as exc:
+        return _redirect("/config", str(exc), level="error")
+    if running == latest:
+        return _redirect("/config", f"yt-dlp {running} is already current.")
+    return _redirect(
+        "/config",
+        f"yt-dlp {latest} installed (was {running}). Restart Yam to use it.",
+        level="success",
     )
 
 
