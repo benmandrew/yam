@@ -1,115 +1,34 @@
 # Yam — project guide for Claude
 
-Self-hosted app to archive YouTube **videos and playlists** by link, store them
-locally, and play them back through one web UI. Replaces a heavyweight
-TubeArchivist install with something minimal.
+Self-hosted app to archive YouTube videos and playlists by link and play them back through one web UI. `README.md` covers running and deploying; `docs/configuration.md` covers settings.
+## Layout
 
-**Design & roadmap live in `PLAN.md`** — read it for architecture decisions,
-data model, milestones, and locked choices. Update `PLAN.md` when scope changes.
+- `yam/main.py` — FastAPI app, routes, lifespan. `worker.py` runs download jobs; `downloader.py` wraps yt-dlp; `library.py` handles deletes; `models.py` holds the SQLModel tables (Video, Playlist, PlaylistVideo, Job).
+- `yam/config.py` — env-only settings, plain dataclass.
+- `tests/` — offline pytest suite.
+- `.github/workflows/` — `ci.yml` (checks, image build, Docker Hub push) and `ytdlp-rebuild.yml` (daily trigger).
 
-## Status
+## Gotchas
 
-Milestones 1–4 (MVP) are done: Nix/Docker/Tailscale scaffolding + DB schema (M1);
-single-video downloads via the background worker with a live `/downloads` page
-(M2); playback — `/media/{id}` Range streaming, `/watch/{id}` native `<video>`
-player, thumbnail library grid (M3); and playlists — enumeration, ordered
-`playlist_video` links, per-entry child jobs with dedup across playlists,
-`/playlist/{id}` view, and manual "Next ▸" playback (M4). Not-yet-downloaded
-playlist entries are stored as `missing` Video rows (hidden from the library,
-shown as "pending" in the playlist).
+- Models have no ORM `Relationship()`. Never insert a PlaylistVideo in the same flush as the Playlist or Video it references; commit the parents first.
+- Use `templates.TemplateResponse(request, name, context)`. The old `(name, {"request": ...})` form raises `TypeError: unhashable type: 'dict'` on the pinned Starlette.
+- New model columns must be nullable with no default so `db.py::_add_missing_columns` can migrate existing databases.
+- `ensure_overlay_on_path()` must stay in `yam/__init__.py`, the only point that runs before `yam.downloader` imports `yt_dlp`.
+- Tests stay offline. `conftest.py` sets a temp `DATA_DIR`/`MEDIA_DIR` before any `yam.*` import, and the `client` fixture builds a TestClient without the lifespan, so the worker never starts.
+- The flake sees only git-tracked files. `git add` new files before `nix build` or `nix flake check`.
 
-M5 (library & job management) is also done: delete video (`yam/library.py`, refused
-while any playlist references it) and delete playlist (full-deletes orphaned videos),
-retry/clear on `/downloads`, and library search + sort.
+## Dependencies
 
-M6 (playlist sync & polish) is done: `POST /api/playlists/{id}/sync` re-enumerates and
-prunes removed links (files kept), retry-pending re-queues missing entries, playlist
-cover thumbnails (`/playlist/{id}/thumbnail` = first present entry), and `/downloads`
-nests child video jobs under their parent playlist job.
-
-M7 (ingestion & access polish) is done: bot-check cookies guidance, WebVTT subtitles,
-optional HTTP Basic auth, `MIN_FREE_SPACE_MB` disk guard, `/config` view.
-
-M8 (testing & CI) is done: offline `pytest` suite in `tests/`, `nix flake check` runs
-ruff + format-check + pytest in a sandbox, GitHub Actions (`.github/workflows/ci.yml`)
-runs it on PRs, and `yam/logging_config.py` provides `LOG_LEVEL`-driven structured
-logging. All milestones complete; see PLAN.md for the remaining backlog.
-
-yt-dlp currency (post-M8): CI rebuilds the image daily, but only when PyPI's current stable
-yt-dlp is newer than the `io.yam.ytdlp.version` label on the published `:latest`; the
-Dockerfile pins that version through a constraints file and stamps the label from the same
-value. At runtime, `POST /api/ytdlp/update` ("Check for update" on `/config`) pip-installs the
-current stable into `$DATA_DIR/ytdlp`, and `ensure_overlay_on_path()` — called from
-`yam/__init__.py`, the only point guaranteed to run before `yam.downloader` imports `yt_dlp` —
-prepends it to `sys.path` only when strictly newer than the baked-in copy, so a rebuilt image
-supersedes it. Takes effect on restart. Stable releases only, never nightlies. See PLAN.md.
-
-Note: models have no ORM `Relationship()`, so never insert a PlaylistVideo in the same
-flush as the Playlist/Video it references — commit the parents first (the worker does).
-
-Tests are offline: `conftest.py` points DATA_DIR/MEDIA_DIR at a temp dir before importing
-any `yam.*` module, and the `client` fixture builds a TestClient *without* the lifespan so
-the background worker (and yt-dlp/network) never start.
-
-## Structure
-
-```
-flake.nix              Nix flake — dev shell + `nix run` (dev dependency source)
-Dockerfile             Production image build (python:slim + ffmpeg + pip)
-requirements.txt       Image Python deps (keep ~in sync with flake pythonEnv)
-yam/
-  config.py            Env-driven settings (plain dataclass, no pydantic-settings)
-  db.py                SQLite engine, WAL/foreign-key pragmas, init_db()
-  models.py            SQLModel tables: Video, Playlist, PlaylistVideo, Job
-  main.py              FastAPI app: lifespan init, routes, static/template mounts
-  logging_config.py    configure_logging() — LOG_LEVEL-driven, called from lifespan
-  ytdlp_update.py      yt-dlp overlay under DATA_DIR (see PLAN.md)
-  templates/           Jinja2 (base.html + index.html); htmx planned for M2+
-  static/style.css     Dark library UI
-tests/                 Offline pytest suite (conftest sets temp DATA_DIR/MEDIA_DIR)
-.github/workflows/ci.yml     GitHub Actions: runs `nix flake check` on PRs/pushes
-docker-compose.yml           Deploy: single container, publishes 8080; front with
-                             host TLS (e.g. host-level `tailscale serve`)
-PLAN.md                Architecture, data model, milestones
-```
-
-## Conventions
-
-- **Two dependency sources, kept in sync:** the Nix flake `pyDeps` list for dev
-  (`nix develop` / `nix run`), and `requirements.txt` for the production image
-  (`Dockerfile`). Bump both together when changing deps. ffmpeg is a runtime dep
-  (flake `runtimeDeps`; `apt-get` in the Dockerfile). Test-only deps (pytest) live
-  in the flake's `testEnv`, not in `requirements.txt` or the app closure.
-- **Videos are stored once, keyed by YouTube id**; playlists reference them
-  through the `playlist_video` link table (a video in N playlists = one file).
-- **Prefer H.264/AAC mp4, no re-encode** (for Safari/iOS + universal playback;
-  ~1080p cap) — see `PLAN.md`. Fallbacks may be webm/mkv.
-- **Starlette gotcha:** use the modern `templates.TemplateResponse(request, name,
-  context)` signature. The old `(name, {"request": ...})` form raises
-  `TypeError: unhashable type: 'dict'` on the pinned Starlette.
-- Config is env-only (`config.py`); the container/package listens on **8080**.
+Two sources, bumped together: the flake's `pyDeps` for dev, and `requirements.txt` for the `Dockerfile`. ffmpeg is a runtime dep (flake `runtimeDeps`, `apt-get` in the Dockerfile). Test-only deps live in the flake's `testEnv`.
 
 ## Commands
 
-All tooling is provided by the flake; enter the devShell first:
-
-```sh
-nix develop                                  # devShell (python env + ffmpeg + ruff + nixpkgs-fmt)
-```
+Run everything inside `nix develop`, which sets `MEDIA_DIR`/`DATA_DIR` to `./.local/*`.
 
 | Task | Command |
 | --- | --- |
-| Run (dev, hot reload) | `uvicorn yam.main:app --reload --port 8080` |
-| Run packaged app | `nix run .#yam` (honors `MEDIA_DIR`/`DATA_DIR`) |
-| Build app | `nix build .#yam` |
-| Build container image | `docker build -t yam:latest .` |
+| Run (hot reload) | `uvicorn yam.main:app --reload --port 8080` |
 | Test | `pytest` |
-| Lint | `ruff check .` |
-| Format Python | `ruff format .` |
-| Format Nix | `nix fmt` (nixpkgs-fmt) |
-| Validate whole flake | `nix flake check` (runs ruff + format-check + pytest) |
-
-In the devShell, `MEDIA_DIR`/`DATA_DIR` default to `./.local/*`.
-
-**Note:** the Nix flake only sees git-tracked files — `git add` new files before
-`nix build`/`nix flake check` or they won't be in the build.
+| Lint / format | `ruff check .` / `ruff format .` / `nix fmt` |
+| Full check (CI) | `nix flake check` |
+| Build | `nix build .#yam` / `docker build -t yam:latest .` |

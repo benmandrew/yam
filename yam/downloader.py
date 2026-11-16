@@ -1,6 +1,6 @@
 """yt-dlp integration: download a single video at highest quality.
 
-Per PLAN.md: best video + best audio, merged to mkv with *no re-encode*, plus
+Best video + best audio, merged to mkv with *no re-encode*, plus
 sidecar metadata (info.json) and a jpg thumbnail. A progress callback receives
 phase/percent/speed/eta so the worker can surface live progress.
 """

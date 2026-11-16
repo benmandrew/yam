@@ -1,7 +1,7 @@
 """Runtime configuration, sourced entirely from environment variables.
 
 Kept dependency-free (plain dataclass + os.environ) so the skeleton has no
-pydantic-settings requirement. See PLAN.md "Configuration" for the full list.
+pydantic-settings requirement. See docs/configuration.md for the full list.
 """
 
 from __future__ import annotations

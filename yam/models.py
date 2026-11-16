@@ -1,4 +1,4 @@
-"""SQLModel tables. Mirrors the data model in PLAN.md.
+"""SQLModel tables.
 
 Videos are keyed by YouTube id and stored once on disk; playlists reference
 videos through the `playlist_video` link table, so a video in several playlists
