@@ -33,7 +33,12 @@ body {
   font-size: 1.25rem;
   color: var(--amber);
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
+
+.brand img { display: block; }
 
 .add-form {
   display: flex;
