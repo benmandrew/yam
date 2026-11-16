@@ -264,6 +264,8 @@ h2 { margin: 1.5rem 0 0.75rem; }
   text-transform: uppercase;
   font-size: 0.72rem;
 }
+.watch-meta .yt-link { color: var(--accent); text-decoration: none; }
+.watch-meta .yt-link:hover { text-decoration: underline; }
 .watch-desc {
   white-space: pre-wrap;
   word-break: break-word;

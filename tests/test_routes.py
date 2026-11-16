@@ -320,3 +320,10 @@ def test_playlist_cover_expires_sooner(client, tmp_path):
     r = client.get("/playlist/PLcache/thumbnail")
     assert r.status_code == 200
     assert r.headers["cache-control"] == "private, max-age=3600"
+
+
+def test_watch_links_to_youtube(client, tmp_path):
+    _add_present_video("dQw4w9WgXcQ", tmp_path)
+    r = client.get("/watch/dQw4w9WgXcQ")
+    assert r.status_code == 200
+    assert 'href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"' in r.text
