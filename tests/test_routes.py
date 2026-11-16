@@ -268,3 +268,55 @@ def test_index_pagination_with_search_narrows_total(client):
     assert _card_count(r2.text) == 5
     assert "Prev" in r2.text
     assert "Next" not in r2.text
+
+
+def _add_video_with_thumbnail(vid: str, tmp_path) -> str:
+    thumb = tmp_path / f"{vid}.jpg"
+    thumb.write_bytes(b"\xff\xd8 fake jpeg")
+    with Session(engine) as s:
+        s.add(
+            Video(
+                id=vid,
+                title=vid,
+                thumbnail_path=str(thumb),
+                status=VideoStatus.present,
+            )
+        )
+        s.commit()
+    return str(thumb)
+
+
+def test_thumbnail_sets_cache_control(client, tmp_path):
+    _add_video_with_thumbnail("thumbcache01", tmp_path)
+    r = client.get("/media/thumbcache01/thumbnail")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "private, max-age=604800"
+    assert r.headers["etag"]
+
+
+def test_thumbnail_revalidation_returns_304(client, tmp_path):
+    _add_video_with_thumbnail("thumbcache02", tmp_path)
+    etag = client.get("/media/thumbcache02/thumbnail").headers["etag"]
+    r = client.get("/media/thumbcache02/thumbnail", headers={"If-None-Match": etag})
+    assert r.status_code == 304
+    assert r.content == b""
+    assert r.headers["etag"] == etag
+
+
+def test_thumbnail_stale_etag_returns_full_body(client, tmp_path):
+    _add_video_with_thumbnail("thumbcache03", tmp_path)
+    r = client.get("/media/thumbcache03/thumbnail", headers={"If-None-Match": '"old"'})
+    assert r.status_code == 200
+    assert r.content == b"\xff\xd8 fake jpeg"
+
+
+def test_playlist_cover_expires_sooner(client, tmp_path):
+    _add_video_with_thumbnail("thumbcache04", tmp_path)
+    with Session(engine) as s:
+        s.add(Playlist(id="PLcache", title="cache"))
+        s.commit()
+        s.add(PlaylistVideo(playlist_id="PLcache", video_id="thumbcache04", position=0))
+        s.commit()
+    r = client.get("/playlist/PLcache/thumbnail")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "private, max-age=3600"

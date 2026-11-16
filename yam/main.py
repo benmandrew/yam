@@ -50,6 +50,34 @@ from .worker import backfill_thumbnails, enqueue_pending_for_playlist, run_worke
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+
+# Cache lifetimes for file routes. Thumbnails and subtitles change only when a
+# backfill rewrites them, and the ETag catches that once max-age runs out. A
+# playlist cover follows its first entry, so it expires sooner. "private"
+# because the app can sit behind Basic auth.
+_CACHE_WEEK = 7 * 24 * 3600
+_CACHE_DAY = 24 * 3600
+_CACHE_HOUR = 3600
+
+
+def _cached_file(
+    request: Request, path: str | Path, media_type: str, max_age: int
+) -> Response:
+    """FileResponse with Cache-Control, answering a matching If-None-Match with
+    304. Starlette's FileResponse sends an ETag but never checks it, so without
+    this every revalidation re-downloads the whole file."""
+    resp = FileResponse(path, media_type=media_type, stat_result=os.stat(path))
+    resp.headers["cache-control"] = f"private, max-age={max_age}"
+    etag = resp.headers["etag"]
+    inm = request.headers.get("if-none-match", "")
+    if etag in (t.strip().removeprefix("W/") for t in inm.split(",")):
+        return Response(
+            status_code=304,
+            headers={"etag": etag, "cache-control": resp.headers["cache-control"]},
+        )
+    return resp
+
+
 # Container -> MIME for the <video> source. mkv has no reliable browser MIME;
 # it is only a last-resort fallback container (see downloader.py).
 _MIME_BY_EXT = {
@@ -152,10 +180,12 @@ def healthz() -> dict[str, str]:
 
 
 @app.get("/favicon.ico", include_in_schema=False)
-def favicon() -> FileResponse:
+def favicon(request: Request) -> Response:
     # Browsers (and some proxies) probe /favicon.ico at the site root and ignore
     # the <link rel="icon"> tag, so serve the PNG here too.
-    return FileResponse(BASE_DIR / "static" / "favicon.png", media_type="image/png")
+    return _cached_file(
+        request, BASE_DIR / "static" / "favicon.png", "image/png", _CACHE_DAY
+    )
 
 
 _SORTS = {
@@ -399,7 +429,7 @@ def playlist_view(request: Request, playlist_id: str):
 
 
 @app.get("/playlist/{playlist_id}/thumbnail")
-def playlist_thumbnail(playlist_id: str):
+def playlist_thumbnail(playlist_id: str, request: Request):
     """Serve the first present entry's thumbnail as the playlist cover."""
     with Session(engine) as session:
         links = session.exec(
@@ -415,7 +445,9 @@ def playlist_thumbnail(playlist_id: str):
                 and video.thumbnail_path
                 and os.path.exists(video.thumbnail_path)
             ):
-                return FileResponse(video.thumbnail_path, media_type="image/jpeg")
+                return _cached_file(
+                    request, video.thumbnail_path, "image/jpeg", _CACHE_HOUR
+                )
     raise HTTPException(status_code=404, detail="No thumbnail available")
 
 
@@ -523,7 +555,7 @@ def media(video_id: str):
 
 
 @app.get("/media/{video_id}/thumbnail")
-def thumbnail(video_id: str):
+def thumbnail(video_id: str, request: Request):
     with Session(engine) as session:
         video = session.get(Video, video_id)
     if (
@@ -532,11 +564,11 @@ def thumbnail(video_id: str):
         or not os.path.exists(video.thumbnail_path)
     ):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return FileResponse(video.thumbnail_path, media_type="image/jpeg")
+    return _cached_file(request, video.thumbnail_path, "image/jpeg", _CACHE_WEEK)
 
 
 @app.get("/media/{video_id}/subtitles")
-def subtitles(video_id: str):
+def subtitles(video_id: str, request: Request):
     with Session(engine) as session:
         video = session.get(Video, video_id)
     if (
@@ -545,7 +577,7 @@ def subtitles(video_id: str):
         or not os.path.exists(video.subtitle_path)
     ):
         raise HTTPException(status_code=404, detail="Subtitles not found")
-    return FileResponse(video.subtitle_path, media_type="text/vtt")
+    return _cached_file(request, video.subtitle_path, "text/vtt", _CACHE_WEEK)
 
 
 @app.post("/api/videos/{video_id}/delete")
