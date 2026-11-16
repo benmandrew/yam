@@ -4,11 +4,19 @@
 # On pushes to main, v* tags, and manual dispatch, the multi-arch image build
 # runs *after* tests pass and publishes to Docker Hub. PRs run tests only.
 #
-# A daily `schedule` covers the case the source tree can't: YouTube breaks
+# A daily schedule covers the case the source tree can't: YouTube breaks
 # yt-dlp's extractor clients on its own schedule, so an image that worked last
-# week starts 403ing without a line of yam changing. The `ytdlp` job compares
-# PyPI's current stable against the version labelled on the published :latest,
-# and the build only runs when they differ -- so a quiet week costs one curl.
+# week starts 403ing without a line of yam changing. The schedule lives in
+# ytdlp-rebuild.yml, which calls this file through `workflow_call`; inside a
+# called workflow `github.event_name` is the caller's, so the `schedule` checks
+# below still apply. The `ytdlp` job compares PyPI's current stable against the
+# version labelled on the published :latest, and a scheduled build only runs
+# when they differ -- so a quiet week costs one curl.
+#
+# The schedule is kept out of this file because GitHub disables any workflow
+# with a `schedule` trigger after 60 days without repository activity, and a
+# disabled workflow ignores pushes too. That stopped every push build from
+# 2026-10-30 until the workflow was re-enabled by hand.
 # The version it resolves is then pinned into the build, which keeps the label
 # honest and stops the two architectures picking up different releases.
 #
@@ -26,9 +34,8 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
-  schedule:
-    - cron: "0 4 * * *"
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   test:

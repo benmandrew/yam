@@ -1,0 +1,15 @@
+# Daily yt-dlp rebuild. See the header of ci.yml.
+#
+# This file holds only the schedule, so GitHub's 60-day inactivity rule can
+# disable this workflow and leave push builds in ci.yml running. If the daily
+# rebuild stops, re-enable it with `gh workflow enable ytdlp-rebuild.yml`.
+name: yt-dlp rebuild
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit

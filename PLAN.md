@@ -132,8 +132,15 @@ returning 403 for the `android_vr` client, yt-dlp dropped that client from its d
 Picking up a yt-dlp release used to require a commit to yam. Two mechanisms now do it without
 one.
 
-**Version-gated daily rebuild.** `.github/workflows/ci.yml` gained a `schedule` trigger at
-cron `0 4 * * *` and a `ytdlp` job (skipped on `pull_request`). That job curls
+**Version-gated daily rebuild.** `.github/workflows/ytdlp-rebuild.yml` runs at cron
+`0 4 * * *` and calls `ci.yml` through `workflow_call`. The schedule began inside `ci.yml`, but
+GitHub disables any workflow with a `schedule` trigger after 60 days without repository
+activity, and a disabled workflow ignores pushes as well. That stopped every push build from
+2026-10-30 to 2026-11-16, so the schedule now has its own file. If GitHub disables it, only the
+daily rebuild stops, and `gh workflow enable ytdlp-rebuild.yml` restores it. A called workflow
+sees the caller's `github.event_name`, so the checks on `schedule` below still work.
+
+`ci.yml` has a `ytdlp` job (skipped on `pull_request`). That job curls
 `https://pypi.org/pypi/yt-dlp/json` for the current stable release and reads the
 `io.yam.ytdlp.version` label off the published `:latest` with `docker buildx imagetools
 inspect`, which is a registry read and pulls no layers. It outputs `version` and `stale`. The
